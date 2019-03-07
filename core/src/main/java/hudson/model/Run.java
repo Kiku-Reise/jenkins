@@ -236,7 +236,7 @@ public abstract class Run <JobT extends Job<JobT,RunT>,RunT extends Run<JobT,Run
      */
     private volatile transient State state;
 
-    private static enum State {
+    private enum State {
         /**
          * Build is created/queued but we haven't started building it.
          */
@@ -1175,7 +1175,7 @@ public abstract class Run <JobT extends Job<JobT,RunT>,RunT extends Run<JobT,Run
         }
         return n;
     }
-
+    
     /**
      * Maximum number of artifacts to list before using switching to the tree view.
      */
@@ -1394,7 +1394,13 @@ public abstract class Run <JobT extends Job<JobT,RunT>,RunT extends Run<JobT,Run
         }
         
         public long getFileSize(){
-            return Long.decode(length);
+            try {
+                return Long.decode(length);
+            }
+            catch (NumberFormatException e) {
+                LOGGER.log(FINE, "Cannot determine file size of the artifact {0}. The length {1} is not a valid long value", new Object[] {this, length});
+                return 0;
+            }
         }
 
         public String getTreeNodeId() {
@@ -1792,7 +1798,9 @@ public abstract class Run <JobT extends Job<JobT,RunT>,RunT extends Run<JobT,Run
                     listener.started(getCauses());
 
                     Authentication auth = Jenkins.getAuthentication();
-                    if (!auth.equals(ACL.SYSTEM)) {
+                    if (auth.equals(ACL.SYSTEM)) {
+                        listener.getLogger().println(Messages.Run_running_as_SYSTEM());
+                    } else {
                         String id = auth.getName();
                         if (!auth.equals(Jenkins.ANONYMOUS)) {
                             final User usr = User.getById(id, false);

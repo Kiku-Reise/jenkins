@@ -74,6 +74,7 @@ import javax.annotation.CheckForNull;
  * @author Kohsuke Kawaguchi
  */
 public class EnvVars extends TreeMap<String,String> {
+    private static final long serialVersionUID = 4320331661987259022L;
     private static Logger LOGGER = Logger.getLogger(EnvVars.class.getName());
     /**
      * If this {@link EnvVars} object represents the whole environment variable set,
@@ -88,7 +89,7 @@ public class EnvVars extends TreeMap<String,String> {
     
     /**
      * Gets the platform for which these env vars targeted.
-     * @since TODO
+     * @since 2.144
      * @return The platform.
      */
     public @CheckForNull Platform getPlatform() {
@@ -97,7 +98,7 @@ public class EnvVars extends TreeMap<String,String> {
 
     /**
      * Sets the platform for which these env vars target.
-     * @since TODO
+     * @since 2.144
      * @param platform the platform to set.
      */
     public void setPlatform(@Nonnull Platform platform) {
@@ -225,8 +226,8 @@ public class EnvVars extends TreeMap<String,String> {
                 }
                 return refereeSetMap.get(n);
             }
-        };
-        
+        }
+
         private final Comparator<? super String> comparator;
         
         @Nonnull

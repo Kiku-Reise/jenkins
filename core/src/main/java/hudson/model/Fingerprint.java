@@ -866,7 +866,7 @@ public class Fingerprint implements ModelObject, Saveable {
     /**
      * Range of builds that use this file keyed by a job full name.
      */
-    private final Hashtable<String,RangeSet> usages = new Hashtable<String,RangeSet>();
+    private Hashtable<String,RangeSet> usages = new Hashtable<String,RangeSet>();
 
     PersistedList<FingerprintFacet> facets = new PersistedList<FingerprintFacet>(this);
 
@@ -973,7 +973,7 @@ public class Fingerprint implements ModelObject, Saveable {
         return r;
     }
 
-    public @Nonnull Hashtable<String,RangeSet> getUsages() {
+    public @CheckForNull Hashtable<String,RangeSet> getUsages() {
         return usages;
     }
 
@@ -1027,6 +1027,14 @@ public class Fingerprint implements ModelObject, Saveable {
     public synchronized void add(@Nonnull String jobFullName, int n) throws IOException {
         addWithoutSaving(jobFullName, n);
         save();
+    }
+
+    // JENKINS-49588
+    protected Object readResolve() {
+        if (usages == null) {
+            usages = new Hashtable<String,RangeSet>();
+        }
+        return this;
     }
 
     void addWithoutSaving(@Nonnull String jobFullName, int n) {
@@ -1412,7 +1420,7 @@ public class Fingerprint implements ModelObject, Saveable {
     }
 
     @Override public String toString() {
-        return "Fingerprint[original=" + original + ",hash=" + getHashString() + ",fileName=" + fileName + ",timestamp=" + DATE_CONVERTER.toString(timestamp) + ",usages=" + new TreeMap<String,RangeSet>(usages) + ",facets=" + facets + "]";
+        return "Fingerprint[original=" + original + ",hash=" + getHashString() + ",fileName=" + fileName + ",timestamp=" + DATE_CONVERTER.toString(timestamp) + ",usages=" + ((usages == null) ? "null" : new TreeMap<String,RangeSet>(getUsages())) + ",facets=" + facets + "]";
     }
     
     /**
