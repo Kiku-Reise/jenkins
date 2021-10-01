@@ -24,18 +24,16 @@
  */
 package jenkins.util.xml;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import org.jaxen.Function;
 import org.jaxen.FunctionContext;
 import org.jaxen.UnresolvableException;
 import org.jaxen.XPathFunctionContext;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Set;
 
 /**
  * {@link org.jaxen.FunctionContext} that removes some {@link org.dom4j.XPath}
@@ -52,8 +50,8 @@ public class FilteredFunctionContext implements FunctionContext {
     /**
      * Default set of "bad" function names.
      */
-    private static final Set<String> DEFAULT_ILLEGAL_FUNCTIONS = Collections.unmodifiableSet(new HashSet<String>(
-            Arrays.asList("document")
+    private static final Set<String> DEFAULT_ILLEGAL_FUNCTIONS = Collections.unmodifiableSet(new HashSet<>(
+            Collections.singletonList("document")
     ));
     private final FunctionContext base;
     private final Set<String> illegalFunctions;

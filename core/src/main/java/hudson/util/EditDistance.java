@@ -19,8 +19,8 @@
  */
 package hudson.util;
 
-import java.util.Collection;
 import java.util.Arrays;
+import java.util.Collection;
 
 /**
  * Computes the string edit distance.
@@ -45,8 +45,8 @@ public class EditDistance {
     }
 
     /**
-     * Finds the string in the <code>group</code> closest to
-     * <code>key</code> and returns it.
+     * Finds the string in the {@code group} closest to
+     * {@code key} and returns it.
      *
      * @return null if group.length==0.
      */
@@ -104,7 +104,7 @@ public class EditDistance {
             flip();
             cost[0] = j+1;
             for( int i=0; i<a.length(); i++ ) {
-                int match = (a.charAt(i)==b.charAt(j))?0:1;
+                int match = a.charAt(i) == b.charAt(j) ? 0 : 1;
                 cost[i+1] = min( back[i]+match, cost[i]+1, back[i+1]+1 );
             }
         }

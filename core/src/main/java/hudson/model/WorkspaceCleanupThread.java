@@ -23,22 +23,21 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.ExtensionList;
 import hudson.FilePath;
 import hudson.Functions;
-import jenkins.util.SystemProperties;
 import hudson.Util;
-import hudson.slaves.WorkspaceList;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
 import jenkins.model.Jenkins;
 import jenkins.model.ModifiableTopLevelItemGroup;
+import jenkins.util.SystemProperties;
 import org.jenkinsci.Symbol;
 
 /**
@@ -65,8 +64,8 @@ public class WorkspaceCleanupThread extends AsyncPeriodicWork {
             LOGGER.fine("Disabled. Skipping execution");
             return;
         }
-        List<Node> nodes = new ArrayList<Node>();
-        Jenkins j = Jenkins.getInstance();
+        List<Node> nodes = new ArrayList<>();
+        Jenkins j = Jenkins.get();
         nodes.add(j);
         nodes.addAll(j.getNodes());
         for (TopLevelItem item : j.allItems(TopLevelItem.class)) {
@@ -82,21 +81,16 @@ public class WorkspaceCleanupThread extends AsyncPeriodicWork {
                 boolean check;
                 try {
                     check = shouldBeDeleted(item, ws, node);
-                } catch (IOException x) {
-                    Functions.printStackTrace(x, listener.error("Failed to check " + node.getDisplayName()));
-                    continue;
-                } catch (InterruptedException x) {
+                } catch (IOException | InterruptedException x) {
                     Functions.printStackTrace(x, listener.error("Failed to check " + node.getDisplayName()));
                     continue;
                 }
                 if (check) {
                     listener.getLogger().println("Deleting " + ws + " on " + node.getDisplayName());
                     try {
+                        ws.deleteSuffixesRecursive();
                         ws.deleteRecursive();
-                        WorkspaceList.tempDir(ws).deleteRecursive();
-                    } catch (IOException x) {
-                        Functions.printStackTrace(x, listener.error("Failed to delete " + ws + " on " + node.getDisplayName()));
-                    } catch (InterruptedException x) {
+                    } catch (IOException | InterruptedException x) {
                         Functions.printStackTrace(x, listener.error("Failed to delete " + ws + " on " + node.getDisplayName()));
                     }
                 }
@@ -104,7 +98,7 @@ public class WorkspaceCleanupThread extends AsyncPeriodicWork {
         }
     }
 
-    private boolean shouldBeDeleted(@Nonnull TopLevelItem item, FilePath dir, @Nonnull Node n) throws IOException, InterruptedException {
+    private boolean shouldBeDeleted(@NonNull TopLevelItem item, FilePath dir, @NonNull Node n) throws IOException, InterruptedException {
         // TODO: the use of remoting is not optimal.
         // One remoting can execute "exists", "lastModified", and "delete" all at once.
         // (Could even invert master loop so that one FileCallable takes care of all known items.)

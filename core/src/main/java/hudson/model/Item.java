@@ -24,26 +24,23 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Functions;
 import hudson.Util;
+import hudson.search.SearchableModelObject;
+import hudson.security.AccessControlled;
+import hudson.security.Permission;
+import hudson.security.PermissionGroup;
+import hudson.security.PermissionScope;
+import hudson.util.Secret;
+import java.io.IOException;
+import java.util.Collection;
 import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
-import hudson.security.PermissionScope;
 import jenkins.util.io.OnMaster;
 import jline.internal.Nullable;
 import org.kohsuke.stapler.StaplerRequest;
-
-import java.io.IOException;
-import java.util.Collection;
-
-import hudson.search.SearchableModelObject;
-import hudson.security.Permission;
-import hudson.security.PermissionGroup;
-import hudson.security.AccessControlled;
-import hudson.util.Secret;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 
 /**
  * Basic configuration unit in Hudson.
@@ -125,6 +122,7 @@ public interface Item extends PersistenceRoot, SearchableModelObject, AccessCont
      * The returned string should not include the display names
      * of {@link #getParent() ancestor items}.
      */
+    @Override
     String getDisplayName();
 
     /**
@@ -140,11 +138,10 @@ public interface Item extends PersistenceRoot, SearchableModelObject, AccessCont
      * @param g
      *      The {@link ItemGroup} instance used as context to evaluate the relative name of this item
      * @return
-     *      The name of the current item, relative to p. Nested {@link ItemGroup}s are separated by {@code /} character.
+     *      The name of the current item, relative to {@code g}, or {@code null} if one of the
+     *      item's parents is not an {@link Item}. Nested {@link ItemGroup}s are separated by a
+     *      {@code /} character (e.g., {@code ../foo/bar}).
      * @since 1.419
-     * @return
-     *      String like "../foo/bar".
-     *      {@code null} if one of item parents is not an {@link Item}.
      */
     @Nullable
     default String getRelativeNameFrom(@CheckForNull ItemGroup g) {
@@ -159,7 +156,7 @@ public interface Item extends PersistenceRoot, SearchableModelObject, AccessCont
      * @since 1.419
      */
     @Nullable
-    default String getRelativeNameFrom(@Nonnull Item item)  {
+    default String getRelativeNameFrom(@NonNull Item item)  {
         return getRelativeNameFrom(item.getParent());
 
     }
@@ -201,7 +198,7 @@ public interface Item extends PersistenceRoot, SearchableModelObject, AccessCont
      */
     @Deprecated
     default String getAbsoluteUrl() {
-        String r = Jenkins.getInstance().getRootUrl();
+        String r = Jenkins.get().getRootUrl();
         if(r==null)
             throw new IllegalStateException("Root URL isn't configured yet. Cannot compute absolute URL.");
         return Util.encode(r+getUrl());
@@ -243,6 +240,7 @@ public interface Item extends PersistenceRoot, SearchableModelObject, AccessCont
      * or {@link AbstractItem#getConfigFile()} to obtain the file
      * to save the data.
      */
+    @Override
     void save() throws IOException;
 
     /**

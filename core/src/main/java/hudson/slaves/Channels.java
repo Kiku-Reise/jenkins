@@ -23,9 +23,9 @@
  */
 package hudson.slaves;
 
+import hudson.FilePath;
 import hudson.Launcher.LocalLauncher;
 import hudson.Proc;
-import hudson.FilePath;
 import hudson.model.Computer;
 import hudson.model.TaskListener;
 import hudson.remoting.Channel;
@@ -36,8 +36,6 @@ import hudson.remoting.SocketChannelStream;
 import hudson.util.ClasspathBuilder;
 import hudson.util.JVMBuilder;
 import hudson.util.StreamCopyThread;
-import jenkins.security.ChannelConfigurator;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOError;
@@ -49,8 +47,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.security.ChannelConfigurator;
 
 /**
  * Various convenient subtype of {@link Channel}s.
@@ -210,7 +210,7 @@ public class Channels {
     public static Channel newJVM(String displayName, TaskListener listener, JVMBuilder vmb, FilePath workDir, ClasspathBuilder classpath) throws IOException {
         ServerSocket serverSocket = new ServerSocket();
         serverSocket.bind(new InetSocketAddress("localhost",0));
-        serverSocket.setSoTimeout(10*1000);
+        serverSocket.setSoTimeout((int)TimeUnit.SECONDS.toMillis(10));
 
         // use -cp + FQCN instead of -jar since remoting.jar can be rebundled (like in the case of the swarm plugin.)
         vmb.classpath().addJarOf(Channel.class);

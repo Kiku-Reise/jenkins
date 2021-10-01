@@ -23,15 +23,14 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.util.AdaptedIterator;
-
-import java.util.Set;
-import java.util.Collection;
 import java.util.AbstractCollection;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArraySet;
-import javax.annotation.Nonnull;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 
 /**
@@ -42,20 +41,23 @@ public class ResourceController {
     /**
      * {@link ResourceList}s that are used by activities that are in progress.
      */
-    private final Set<ResourceActivity> inProgress = new CopyOnWriteArraySet<ResourceActivity>();
+    private final Set<ResourceActivity> inProgress = new CopyOnWriteArraySet<>();
 
     /**
      * View of {@link #inProgress} that exposes its {@link ResourceList}.
      */
     private final Collection<ResourceList> resourceView = new AbstractCollection<ResourceList>() {
+        @Override
         public Iterator<ResourceList> iterator() {
             return new AdaptedIterator<ResourceActivity,ResourceList>(inProgress.iterator()) {
+                @Override
                 protected ResourceList adapt(ResourceActivity item) {
                     return item.getResourceList();
                 }
             };
         }
 
+        @Override
         public int size() {
             return inProgress.size();
         }
@@ -76,7 +78,7 @@ public class ResourceController {
      * @throws InterruptedException
      *      the thread can be interrupted while waiting for the available resources.
      */
-    public void execute(@Nonnull Runnable task, final ResourceActivity activity ) throws InterruptedException {
+    public void execute(@NonNull Runnable task, final ResourceActivity activity ) throws InterruptedException {
         final ResourceList resources = activity.getResourceList();
         _withLock(new NotReallyRoleSensitiveCallable<Void,InterruptedException>() {
             @Override
@@ -190,4 +192,3 @@ public class ResourceController {
         }
     }
 }
-

@@ -26,6 +26,15 @@ package hudson.widgets;
 import hudson.Util;
 import hudson.model.Descriptor;
 import hudson.util.PackedMap;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.servlet.ServletException;
 import org.apache.commons.jelly.JellyContext;
 import org.apache.commons.jelly.JellyTagException;
 import org.apache.commons.jelly.Script;
@@ -36,16 +45,6 @@ import org.kohsuke.stapler.bind.JavaScriptMethod;
 import org.kohsuke.stapler.framework.adjunct.AdjunctsInPage;
 import org.kohsuke.stapler.jelly.DefaultScriptInvoker;
 import org.xml.sax.SAXException;
-
-import javax.servlet.ServletException;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Captured Jelly {@link Script} that can be rendered later on demand from JavaScript.
@@ -63,15 +62,15 @@ public class RenderOnDemandClosure {
     private final String[] adjuncts;
 
     public RenderOnDemandClosure(JellyContext context, String attributesToCapture) {
-        List<Script> bodyStack = new ArrayList<Script>();
+        List<Script> bodyStack = new ArrayList<>();
         for (JellyContext c = context; c!=null; c=c.getParent()) {
             Script script = (Script) c.getVariables().get("org.apache.commons.jelly.body");
             if(script!=null) bodyStack.add(script);
         }
-        this.bodyStack = bodyStack.toArray(new Script[bodyStack.size()]);
+        this.bodyStack = bodyStack.toArray(new Script[0]);
         assert !bodyStack.isEmpty();    // there must be at least one, which is the direct child of <l:renderOnDemand>
 
-        Map<String,Object> variables = new HashMap<String, Object>();
+        Map<String,Object> variables = new HashMap<>();
         for (String v : Util.fixNull(attributesToCapture).split(","))
             variables.put(v.intern(),context.getVariable(v));
 
@@ -94,7 +93,9 @@ public class RenderOnDemandClosure {
     @JavaScriptMethod
     public HttpResponse render() {
         return new HttpResponse() {
+            @Override
             public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object node) throws IOException, ServletException {
+                req.getWebApp().getDispatchValidator().allowDispatch(req, rsp);
                 try {
                     new DefaultScriptInvoker() {
                         @Override
@@ -106,9 +107,7 @@ public class RenderOnDemandClosure {
                             }
                             try {
                                 AdjunctsInPage.get().assumeIncluded(adjuncts);
-                            } catch (IOException e) {
-                                LOGGER.log(Level.WARNING, "Failed to resurrect adjunct context",e);
-                            } catch (SAXException e) {
+                            } catch (IOException | SAXException e) {
                                 LOGGER.log(Level.WARNING, "Failed to resurrect adjunct context",e);
                             }
                             return context;

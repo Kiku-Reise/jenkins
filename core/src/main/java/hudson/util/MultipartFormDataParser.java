@@ -23,31 +23,30 @@
  */
 package hudson.util;
 
-import org.apache.commons.fileupload.servlet.ServletFileUpload;
-import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import java.util.HashMap;
+import java.util.Map;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileUploadException;
-
-import javax.annotation.CheckForNull;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.ServletException;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
+import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.apache.commons.lang.ArrayUtils;
 
 /**
- * Wraps commons file-upload and handles a "multipart/form-data" form submisison
+ * Wraps commons file-upload and handles a "multipart/form-data" form submission
  * (that often includes file upload.)
  *
  * @author Kohsuke Kawaguchi
  */
 public class MultipartFormDataParser implements AutoCloseable {
     private final ServletFileUpload upload = new ServletFileUpload(new DiskFileItemFactory());
-    private final Map<String,FileItem> byName = new HashMap<String,FileItem>();
+    private final Map<String,FileItem> byName = new HashMap<>();
 
     public MultipartFormDataParser(HttpServletRequest request) throws ServletException {
         try {
-            for( FileItem fi : (List<FileItem>)upload.parseRequest(request) )
+            for( FileItem fi : upload.parseRequest(request))
                 byName.put(fi.getFieldName(),fi);
         } catch (FileUploadException e) {
             throw new ServletException(e);
@@ -92,16 +91,6 @@ public class MultipartFormDataParser implements AutoCloseable {
         }
 
         String[] parts = contentType.split(";");
-        if (parts.length == 0) {
-            return false;
-        }
-
-        for (int i = 0; i < parts.length; i++) {
-            if ("multipart/form-data".equals(parts[i])) {
-                return true;
-            }
-        }
-
-        return false;
+        return ArrayUtils.contains(parts, "multipart/form-data");
     }
 }

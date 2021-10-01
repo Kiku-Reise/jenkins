@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package hudson.tasks.Shell;
+package hudson.tasks.Shell
 f=namespace(lib.FormTagLib)
 
 f.entry(title:_("Command"),description:_("description",rootURL)) {
@@ -33,4 +33,17 @@ f.advanced() {
         f.number(clazz:"positive-number", value: instance?.unstableReturn, min:1, max:255, step:1)
     }
 
+    if (instance?.configuredLocalRules || descriptor.applicableLocalRules) {
+        f.entry(title: _("filterRules")) {
+            f.hetero_list(
+                    name: "configuredLocalRules",
+                    hasHeader: true,
+                    oneEach: true,
+                    disableDragAndDrop: true,
+                    descriptors: descriptor.applicableLocalRules,
+                    items: instance?.configuredLocalRules,
+                    addCaption: _("addFilterRule")
+            )
+        }
+    }
 }

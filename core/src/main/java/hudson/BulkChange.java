@@ -24,7 +24,6 @@
 package hudson;
 
 import hudson.model.Saveable;
-
 import java.io.Closeable;
 import java.io.IOException;
 
@@ -132,7 +131,7 @@ public class BulkChange implements Closeable {
     /**
      * {@link BulkChange}s that are effective currently.
      */
-    private static final ThreadLocal<BulkChange> INSCOPE = new ThreadLocal<BulkChange>();
+    private static final ThreadLocal<BulkChange> INSCOPE = new ThreadLocal<>();
 
     /**
      * Gets the {@link BulkChange} instance currently in scope for the current thread.
@@ -160,8 +159,6 @@ public class BulkChange implements Closeable {
      * all the save operations by making the {@link #contains(Saveable)} method return
      * true for everything.
      */
-    public static final Saveable ALL = new Saveable() {
-        public void save() {
-        }
+    public static final Saveable ALL = () -> {
     };
 }

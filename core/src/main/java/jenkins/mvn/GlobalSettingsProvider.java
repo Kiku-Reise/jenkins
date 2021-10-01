@@ -6,11 +6,8 @@ import hudson.model.AbstractBuild;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
 import hudson.model.TaskListener;
-
 import javax.servlet.ServletException;
-
 import net.sf.json.JSONObject;
-
 import org.kohsuke.stapler.StaplerRequest;
 
 /**
@@ -25,7 +22,7 @@ public abstract class GlobalSettingsProvider extends AbstractDescribableImpl<Glo
      * 
      * @param build
      *            the build to provide the settings for
-     * @return the filepath to the provided file. <code>null</code> if no settings will be provided.
+     * @return the filepath to the provided file. {@code null} if no settings will be provided.
      */
     public abstract FilePath supplySettings(AbstractBuild<?, ?> build, TaskListener listener);
 
@@ -38,7 +35,7 @@ public abstract class GlobalSettingsProvider extends AbstractDescribableImpl<Glo
     }
 
     /**
-     * Convenience method handling all <code>null</code> checks. Provides the path on the (possible) remote settings file.
+     * Convenience method handling all {@code null} checks. Provides the path on the (possible) remote settings file.
      * 
      * @param settings
      *            the provider to be used
@@ -57,7 +54,7 @@ public abstract class GlobalSettingsProvider extends AbstractDescribableImpl<Glo
     }
 
     /**
-     * Convenience method handling all <code>null</code> checks. Provides the path on the (possible) remote settings file.
+     * Convenience method handling all {@code null} checks. Provides the path on the (possible) remote settings file.
      * 
      * @param provider
      *            the provider to be used

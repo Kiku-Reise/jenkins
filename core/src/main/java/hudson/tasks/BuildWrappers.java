@@ -23,15 +23,14 @@
  */
 package hudson.tasks;
 
-import hudson.model.AbstractProject;
-import hudson.model.Descriptor;
-import jenkins.model.Jenkins;
-import hudson.model.AbstractProject.AbstractProjectDescriptor;
 import hudson.Extension;
+import hudson.model.AbstractProject;
+import hudson.model.AbstractProject.AbstractProjectDescriptor;
+import hudson.model.Descriptor;
 import hudson.util.DescriptorList;
-
 import java.util.ArrayList;
 import java.util.List;
+import jenkins.model.Jenkins;
 
 /**
  * List of all installed {@link BuildWrapper}.
@@ -56,7 +55,7 @@ public class BuildWrappers {
      */
     public static List<Descriptor<BuildWrapper>> getFor(AbstractProject<?, ?> project) {
         List<Descriptor<BuildWrapper>> result = new ArrayList<>();
-        Descriptor pd = Jenkins.getInstance().getDescriptor((Class)project.getClass());
+        Descriptor pd = Jenkins.get().getDescriptor((Class)project.getClass());
 
         for (Descriptor<BuildWrapper> w : BuildWrapper.all()) {
             if (pd instanceof AbstractProjectDescriptor && !((AbstractProjectDescriptor)pd).isApplicable(w))

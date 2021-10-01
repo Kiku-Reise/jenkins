@@ -24,14 +24,18 @@
 
 package hudson.util;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assume.assumeNoException;
+import static org.junit.Assume.assumeThat;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
 import java.nio.charset.Charset;
-import static org.hamcrest.CoreMatchers.*;
+import java.nio.charset.StandardCharsets;
 import org.junit.After;
-import static org.junit.Assert.*;
-import static org.junit.Assume.*;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -70,7 +74,7 @@ public class XStream2EncodingTest {
         Thing t = (Thing) xs.fromXML(new ByteArrayInputStream(ambiguousXml));
         assertThat(t.field, not(msg));
         ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
-        baos2.write("<?xml version='1.0' encoding='UTF-8'?>\n".getBytes("UTF-8"));
+        baos2.write("<?xml version='1.0' encoding='UTF-8'?>\n".getBytes(StandardCharsets.UTF_8));
         baos2.write(ambiguousXml);
         t = (Thing) xs.fromXML(new ByteArrayInputStream(ambiguousXml));
         assertThat(t.field, not(msg));

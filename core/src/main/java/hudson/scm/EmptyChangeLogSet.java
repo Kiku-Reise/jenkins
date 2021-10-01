@@ -3,7 +3,6 @@ package hudson.scm;
 import hudson.model.Run;
 import java.io.IOException;
 import java.net.URL;
-
 import java.util.Collections;
 import java.util.Iterator;
 
@@ -26,7 +25,8 @@ final class EmptyChangeLogSet extends ChangeLogSet<ChangeLogSet.Entry> {
         return true;
     }
 
+    @Override
     public Iterator<Entry> iterator() {
-        return Collections.<Entry>emptySet().iterator();
+        return Collections.emptyIterator();
     }
 }

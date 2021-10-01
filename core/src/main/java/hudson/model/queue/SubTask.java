@@ -23,6 +23,8 @@
  */
 package hudson.model.queue;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.AbstractProject;
 import hudson.model.Executor;
 import hudson.model.Label;
@@ -30,10 +32,7 @@ import hudson.model.Node;
 import hudson.model.Queue.Executable;
 import hudson.model.Queue.Task;
 import hudson.model.ResourceActivity;
-
-import javax.annotation.Nonnull;
 import java.io.IOException;
-import javax.annotation.CheckForNull;
 
 /**
  * A component of {@link Task} that represents a computation carried out by a single {@link Executor}.
@@ -90,7 +89,7 @@ public interface SubTask extends ResourceActivity {
      * Gets the {@link Task} that this subtask belongs to.
      * @return by default, {@code this}
      */
-    default @Nonnull Task getOwnerTask() {
+    default @NonNull Task getOwnerTask() {
         return (Task) this;
     }
 

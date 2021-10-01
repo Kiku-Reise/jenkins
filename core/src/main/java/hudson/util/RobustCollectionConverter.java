@@ -23,21 +23,19 @@
  */
 package hudson.util;
 
+import com.thoughtworks.xstream.XStream;
+import com.thoughtworks.xstream.XStreamException;
 import com.thoughtworks.xstream.converters.UnmarshallingContext;
 import com.thoughtworks.xstream.converters.collections.CollectionConverter;
 import com.thoughtworks.xstream.converters.reflection.ReflectionProvider;
 import com.thoughtworks.xstream.converters.reflection.SerializableConverter;
+import com.thoughtworks.xstream.core.ClassLoaderReference;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.mapper.Mapper;
-import com.thoughtworks.xstream.XStream;
-import com.thoughtworks.xstream.XStreamException;
-
 import java.util.Collection;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
-
 import jenkins.util.xstream.CriticalXStreamException;
-
 
 /**
  * {@link CollectionConverter} that ignores {@link XStreamException}.
@@ -48,6 +46,7 @@ import jenkins.util.xstream.CriticalXStreamException;
  *
  * @author Kohsuke Kawaguchi
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class RobustCollectionConverter extends CollectionConverter {
     private final SerializableConverter sc;
 
@@ -57,7 +56,7 @@ public class RobustCollectionConverter extends CollectionConverter {
 
     public RobustCollectionConverter(Mapper mapper, ReflectionProvider reflectionProvider) {
         super(mapper);
-        sc = new SerializableConverter(mapper,reflectionProvider);
+        sc = new SerializableConverter(mapper, reflectionProvider, new ClassLoaderReference(null));
     }
 
     @Override
@@ -82,13 +81,11 @@ public class RobustCollectionConverter extends CollectionConverter {
         while (reader.hasMoreChildren()) {
             reader.moveDown();
             try {
-                Object item = readItem(reader, context, collection);
+                Object item = readBareItem(reader, context, collection);
                 collection.add(item);
             } catch (CriticalXStreamException e) {
                 throw e;
-            } catch (XStreamException e) {
-                RobustReflectionConverter.addErrorInContext(context, e);
-            } catch (LinkageError e) {
+            } catch (XStreamException | LinkageError e) {
                 RobustReflectionConverter.addErrorInContext(context, e);
             }
             reader.moveUp();

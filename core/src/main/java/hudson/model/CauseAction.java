@@ -23,14 +23,11 @@
  */
 package hudson.model;
 
+import com.thoughtworks.xstream.converters.UnmarshallingContext;
 import hudson.diagnosis.OldDataMonitor;
 import hudson.model.Queue.Task;
 import hudson.model.queue.FoldableAction;
 import hudson.util.XStream2;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.export.ExportedBean;
-import com.thoughtworks.xstream.converters.UnmarshallingContext;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -39,6 +36,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import jenkins.model.RunAction2;
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
 
 @ExportedBean
 public class CauseAction implements FoldableAction, RunAction2 {
@@ -56,8 +55,8 @@ public class CauseAction implements FoldableAction, RunAction2 {
     private Map<Cause,Integer> causeBag = new LinkedHashMap<>();
 
     public CauseAction(Cause c) {
-   		this.causeBag.put(c, 1);
-   	}
+        this.causeBag.put(c, 1);
+    }
 
     private void addCause(Cause c) {
         synchronized (causeBag) {
@@ -72,16 +71,17 @@ public class CauseAction implements FoldableAction, RunAction2 {
     }
 
     public CauseAction(Cause... c) {
-   		this(Arrays.asList(c));
-   	}
+        this(Arrays.asList(c));
+    }
 
+    @SuppressWarnings("CopyConstructorMissesField") // does not initialize the deprecated #cause field
     public CauseAction(Collection<? extends Cause> causes) {
-   		addCauses(causes);
-   	}
+        addCauses(causes);
+    }
 
-   	public CauseAction(CauseAction ca) {
-   		addCauses(ca.getCauses());
-   	}
+    public CauseAction(CauseAction ca) {
+        addCauses(ca.getCauses());
+    }
 
     /**
      * Lists all causes of this build.
@@ -90,14 +90,14 @@ public class CauseAction implements FoldableAction, RunAction2 {
      *         to create an action with multiple causes use either of the constructors that support this;
      *         to append causes retroactively to a build you must create a new {@link CauseAction} and replace the old
      */
-	@Exported(visibility=2)
-	public List<Cause> getCauses() {
-		List<Cause> r = new ArrayList<>();
+    @Exported(visibility=2)
+    public List<Cause> getCauses() {
+        List<Cause> r = new ArrayList<>();
         for (Map.Entry<Cause,Integer> entry : causeBag.entrySet()) {
             r.addAll(Collections.nCopies(entry.getValue(), entry.getKey()));
         }
         return Collections.unmodifiableList(r);
-	}
+    }
 
     /**
      * Finds the cause of the specific type.
@@ -108,19 +108,22 @@ public class CauseAction implements FoldableAction, RunAction2 {
                 return type.cast(c);
         return null;
     }
-		
-	public String getDisplayName() {
-		return "Cause";
-	}
 
-	public String getIconFileName() {
-		// no icon
-		return null;
-	}
+    @Override
+    public String getDisplayName() {
+        return "Cause";
+    }
 
-	public String getUrlName() {
-		return "cause";
-	}
+    @Override
+    public String getIconFileName() {
+        // no icon
+        return null;
+    }
+
+    @Override
+    public String getUrlName() {
+        return "cause";
+    }
 
     /**
      * Get list of causes with duplicates combined into counters.
@@ -161,6 +164,7 @@ public class CauseAction implements FoldableAction, RunAction2 {
         }
     }
 
+    @Override
     public void foldIntoExisting(hudson.model.Queue.Item item, Task owner, List<Action> otherActions) {
         CauseAction existing = item.getAction(CauseAction.class);
         if (existing!=null) {

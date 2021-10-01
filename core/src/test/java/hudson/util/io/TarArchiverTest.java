@@ -23,6 +23,9 @@
  */
 package hudson.util.io;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assume.assumeTrue;
+
 import hudson.FilePath;
 import hudson.Functions;
 import hudson.Launcher.LocalLauncher;
@@ -31,14 +34,11 @@ import hudson.model.TaskListener;
 import hudson.util.NullStream;
 import hudson.util.StreamTaskListener;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.Arrays;
-import static org.junit.Assert.*;
 import org.junit.Assume;
-import static org.junit.Assume.*;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -137,12 +137,12 @@ public class TarArchiverTest {
         t1.join();
     }
 
-    private class GrowingFileRunnable implements Runnable {
+    private static class GrowingFileRunnable implements Runnable {
         private boolean finish = false;
         private Exception ex = null;
         private File file;
 
-        public GrowingFileRunnable(File file) {
+        GrowingFileRunnable(File file) {
             this.file = file;
         }
 
@@ -168,6 +168,6 @@ public class TarArchiverTest {
                 throw ex;
             }
         }
-    };
+    }
 
 }

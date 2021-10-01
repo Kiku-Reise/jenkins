@@ -24,9 +24,9 @@
 package jenkins.util;
 
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
-
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionEvent;
 
@@ -38,6 +38,7 @@ import javax.servlet.http.HttpSessionEvent;
  * @author <a href="mailto:tom.fennelly@gmail.com">tom.fennelly@gmail.com</a>
  * @since 2.2
  */
+@SuppressFBWarnings(value = "NM_SAME_SIMPLE_NAME_AS_INTERFACE", justification = "Should shadow HttpSessionListener")
 public abstract class HttpSessionListener implements ExtensionPoint, javax.servlet.http.HttpSessionListener {
 
     /**
@@ -48,16 +49,10 @@ public abstract class HttpSessionListener implements ExtensionPoint, javax.servl
         return ExtensionList.lookup(HttpSessionListener.class);
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public void sessionCreated(HttpSessionEvent httpSessionEvent) {
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public void sessionDestroyed(HttpSessionEvent httpSessionEvent) {
     }

@@ -24,6 +24,12 @@
 
 package hudson.model;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
 import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
 import hudson.Launcher;
 import hudson.model.Descriptor.PropertyType;
@@ -34,13 +40,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
-
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
-
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.*;
-
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
@@ -61,13 +62,9 @@ public class DescriptorTest {
         Describable<?> instance = new Shell("echo hello");
         Descriptor<?> descriptor = instance.getDescriptor();
         PropertyType propertyType = descriptor.getPropertyType(instance, "command");
-        try {
-            propertyType.getItemTypeDescriptorOrDie();
-            fail("not supposed to succeed");
-        } catch (AssertionError x) {
-            for (String text : new String[] {"hudson.tasks.CommandInterpreter", "getCommand", "java.lang.String", "collection"}) {
-                assertTrue(text + " mentioned in " + x, x.toString().contains(text));
-            }
+        AssertionError x = assertThrows(AssertionError.class, () -> propertyType.getItemTypeDescriptorOrDie());
+        for (String text : new String[]{"hudson.tasks.CommandInterpreter", "getCommand", "java.lang.String", "collection"}) {
+            assertTrue(text + " mentioned in " + x, x.toString().contains(text));
         }
     }
 
@@ -99,7 +96,7 @@ public class DescriptorTest {
             return true;
         }
         @Override public Descriptor<Builder> getDescriptor() {
-            return (Descriptor<Builder>) Jenkins.getInstance().getDescriptorByName(id);
+            return (Descriptor<Builder>) Jenkins.get().getDescriptorByName(id);
         }
     }
     private static final class DescriptorImpl extends BuildStepDescriptor<Builder> {
@@ -128,7 +125,7 @@ public class DescriptorTest {
         rule.configRoundtrip(p);
         rule.assertLogContains("[D1, D2]", rule.buildAndAssertSuccess(p));
     }
-    public static abstract class D extends AbstractDescribableImpl<D> {
+    public abstract static class D extends AbstractDescribableImpl<D> {
         @Override public String toString() {return getDescriptor().getDisplayName();}
     }
     public static class D1 extends D {
@@ -172,7 +169,7 @@ public class DescriptorTest {
             return id;
         }
         @Override public Descriptor<D3> getDescriptor() {
-            return Jenkins.getInstance().getDescriptorByName(id);
+            return Jenkins.get().getDescriptorByName(id);
         }
     }
     public static class D3D extends Descriptor<D3> {
@@ -206,19 +203,16 @@ public class DescriptorTest {
     public void presentStacktraceFromFormException() throws Exception {
         NullPointerException cause = new NullPointerException();
         final Descriptor.FormException fe = new Descriptor.FormException("My Message", cause, "fake");
-        try {
+        FailingHttpStatusCodeException ex = assertThrows(FailingHttpStatusCodeException.class, () ->
             rule.executeOnServer(new Callable<Void>() {
                 @Override public Void call() throws Exception {
-                    fe.generateResponse(Stapler.getCurrentRequest(), Stapler.getCurrentResponse(), Jenkins.getInstance());
+                    fe.generateResponse(Stapler.getCurrentRequest(), Stapler.getCurrentResponse(), Jenkins.get());
                     return null;
                 }
-            });
-            fail();
-        } catch (FailingHttpStatusCodeException ex) {
-            String response = ex.getResponse().getContentAsString();
-            assertThat(response, containsString(fe.getMessage()));
-            assertThat(response, containsString(cause.getClass().getCanonicalName()));
-            assertThat(response, containsString(getClass().getCanonicalName()));
-        }
+            }));
+        String response = ex.getResponse().getContentAsString();
+        assertThat(response, containsString(fe.getMessage()));
+        assertThat(response, containsString(cause.getClass().getCanonicalName()));
+        assertThat(response, containsString(getClass().getCanonicalName()));
     }
 }

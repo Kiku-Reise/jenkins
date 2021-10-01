@@ -24,16 +24,15 @@
 package jenkins;
 
 import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
+import java.io.IOException;
 import net.sf.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
-import org.jvnet.hudson.test.JenkinsRule;
-import org.xml.sax.SAXException;
-
-import java.io.IOException;
 import org.jvnet.hudson.test.Issue;
+import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.TestPluginManager;
+import org.xml.sax.SAXException;
 
 /**
  * @author <a href="mailto:tom.fennelly@gmail.com">tom.fennelly@gmail.com</a>
@@ -63,13 +62,11 @@ public class I18nTest {
     @Issue("JENKINS-35270")
     @Test
     public void test_baseName_plugin() throws Exception {
-        ((TestPluginManager) jenkinsRule.jenkins.pluginManager).installDetachedPlugin("credentials");
-        ((TestPluginManager) jenkinsRule.jenkins.pluginManager).installDetachedPlugin("ssh-credentials");
-        ((TestPluginManager) jenkinsRule.jenkins.pluginManager).installDetachedPlugin("ssh-slaves");
-        JSONObject response = jenkinsRule.getJSON("i18n/resourceBundle?baseName=hudson.plugins.sshslaves.Messages").getJSONObject();
+        ((TestPluginManager) jenkinsRule.jenkins.pluginManager).installDetachedPlugin("matrix-auth");
+        JSONObject response = jenkinsRule.getJSON("i18n/resourceBundle?baseName=org.jenkinsci.plugins.matrixauth.Messages").getJSONObject();
         Assert.assertEquals(response.toString(), "ok", response.getString("status"));
         JSONObject data = response.getJSONObject("data");
-        Assert.assertEquals("The launch timeout must be a number.", data.getString("SSHConnector.LaunchTimeoutMustBeANumber"));
+        Assert.assertEquals("Matrix-based security", data.getString("GlobalMatrixAuthorizationStrategy.DisplayName"));
     }
 
     @Test

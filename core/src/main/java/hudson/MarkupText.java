@@ -45,7 +45,7 @@ public class MarkupText extends AbstractMarkupText {
     /**
      * Added mark up tags.
      */
-    private final List<Tag> tags = new ArrayList<Tag>();
+    private final List<Tag> tags = new ArrayList<>();
 
     /**
      * Represents one mark up inserted into text.
@@ -59,11 +59,12 @@ public class MarkupText extends AbstractMarkupText {
         private final String markup;
 
 
-        public Tag(int pos, String markup) {
+        Tag(int pos, String markup) {
             this.pos = pos;
             this.markup = markup;
         }
 
+        @Override
         public int compareTo(Tag that) {
             return this.pos-that.pos;
         }
@@ -249,6 +250,7 @@ public class MarkupText extends AbstractMarkupText {
      * @param end
      *      If negative, -N means "trim the last N-1 chars". That is, (s,-1) is the same as (s,length)
      */
+    @Override
     public SubText subText(int start, int end) {
         return new SubText(start, end<0 ? text.length()+1+end : end);
     }
@@ -313,7 +315,7 @@ public class MarkupText extends AbstractMarkupText {
             buf.append(tag.markup);
         }
         if (copied<text.length()) {
-            String portion = text.substring(copied, text.length());
+            String portion = text.substring(copied);
             buf.append(preEscape ? Util.xmlEscape(portion) : Util.escape(portion));
         }
 

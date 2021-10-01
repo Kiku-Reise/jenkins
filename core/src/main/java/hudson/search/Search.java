@@ -25,12 +25,12 @@
 package hudson.search;
 
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
+
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Util;
 import hudson.util.EditDistance;
-
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,12 +39,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.annotation.CheckForNull;
 import javax.servlet.ServletException;
-
-import jenkins.util.MemoryReductionUtil;
 import jenkins.model.Jenkins;
+import jenkins.util.MemoryReductionUtil;
+import jenkins.util.SystemProperties;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.Ancestor;
@@ -68,10 +66,6 @@ import org.kohsuke.stapler.export.Flavor;
  * @see SearchableModelObject
  */
 public class Search implements StaplerProxy {
-    @Restricted(NoExternalUse.class) // used from stapler views only
-    public static String encodeQuery(String query) throws UnsupportedEncodingException {
-        return URLEncoder.encode(query, "UTF-8");
-    }
 
     public void doIndex(StaplerRequest req, StaplerResponse rsp) throws IOException, ServletException {
         List<Ancestor> l = req.getAncestors();
@@ -142,7 +136,7 @@ public class Search implements StaplerProxy {
      *      a certain threshold to avoid showing too many options. 
      */
     public SearchResult getSuggestions(StaplerRequest req, String query) {
-        Set<String> paths = new HashSet<String>();  // paths already added, to control duplicates
+        Set<String> paths = new HashSet<>();  // paths already added, to control duplicates
         SearchResultImpl r = new SearchResultImpl();
         int max = req.hasParameter("max") ? Integer.parseInt(req.getParameter("max")) : 100;
         SearchableModelObject smo = findClosestSearchableModelObject(req);
@@ -186,6 +180,7 @@ public class Search implements StaplerProxy {
 
         private boolean hasMoreResults = false;
 
+        @Override
         public boolean hasMoreResults() {
             return hasMoreResults;
         }
@@ -194,7 +189,7 @@ public class Search implements StaplerProxy {
     @ExportedBean
     public static class Result {
         @Exported
-        public List<Item> suggestions = new ArrayList<Item>();
+        public List<Item> suggestions = new ArrayList<>();
     }
 
     @ExportedBean(defaultVisibility=999)
@@ -209,11 +204,13 @@ public class Search implements StaplerProxy {
 
     private enum Mode {
         FIND {
+            @Override
             void find(SearchIndex index, String token, List<SearchItem> result) {
                 index.find(token, result);
             }
         },
         SUGGEST {
+            @Override
             void find(SearchIndex index, String token, List<SearchItem> result) {
                 index.suggest(token, result);
             }
@@ -303,6 +300,7 @@ public class Search implements StaplerProxy {
                 prefixMatch = i.getPath().startsWith(tokenList)?1:0;
             }
 
+            @Override
             public int compareTo(Tag that) {
                 int r = this.prefixMatch -that.prefixMatch;
                 if(r!=0)    return -r;  // ones with head match should show up earlier
@@ -310,7 +308,7 @@ public class Search implements StaplerProxy {
             }
         }
 
-        List<Tag> buf = new ArrayList<Tag>();
+        List<Tag> buf = new ArrayList<>();
         List<SuggestedItem> items = find(Mode.SUGGEST, index, tokenList, searchContext);
 
         // sort them
@@ -327,7 +325,7 @@ public class Search implements StaplerProxy {
     static final class TokenList {
         private final String[] tokens;
 
-        public TokenList(String tokenList) {
+        TokenList(String tokenList) {
             tokens = tokenList!=null ? tokenList.split("(?<=\\s)(?=\\S)") : MemoryReductionUtil.EMPTY_STRING_ARRAY;
         }
 
@@ -340,6 +338,7 @@ public class Search implements StaplerProxy {
          */
         public List<String> subSequence(final int start) {
             return new AbstractList<String>() {
+                @Override
                 public String get(int index) {
                     StringBuilder buf = new StringBuilder();
                     for(int i=start; i<=start+index; i++ )
@@ -347,6 +346,7 @@ public class Search implements StaplerProxy {
                     return buf.toString().trim();
                 }
 
+                @Override
                 public int size() {
                     return tokens.length-start;
                 }
@@ -354,6 +354,7 @@ public class Search implements StaplerProxy {
         }
         
         
+        @Override
         public String toString() {
             StringBuilder s = new StringBuilder("TokenList{");
             for(String token : tokens) {
@@ -372,9 +373,9 @@ public class Search implements StaplerProxy {
 
         List<SuggestedItem>[] paths = new List[tokens.length()+1]; // we won't use [0].
         for(int i=1;i<=tokens.length();i++)
-            paths[i] = new ArrayList<SuggestedItem>();
+            paths[i] = new ArrayList<>();
 
-        List<SearchItem> items = new ArrayList<SearchItem>(); // items found in 1 step
+        List<SearchItem> items = new ArrayList<>(); // items found in 1 step
 
         LOGGER.log(Level.FINE, "tokens={0}", tokens);
         
@@ -413,7 +414,7 @@ public class Search implements StaplerProxy {
     @Restricted(NoExternalUse.class)
     public Object getTarget() {
         if (!SKIP_PERMISSION_CHECK) {
-            Jenkins.getInstance().checkPermission(Jenkins.READ);
+            Jenkins.get().checkPermission(Jenkins.READ);
         }
         return this;
     }
@@ -421,8 +422,9 @@ public class Search implements StaplerProxy {
     /**
      * Escape hatch for StaplerProxy-based access control
      */
+    @SuppressFBWarnings("MS_SHOULD_BE_FINAL")
     @Restricted(NoExternalUse.class)
-    public static /* Script Console modifiable */ boolean SKIP_PERMISSION_CHECK = Boolean.getBoolean(Search.class.getName() + ".skipPermissionCheck");
+    public static /* Script Console modifiable */ boolean SKIP_PERMISSION_CHECK = SystemProperties.getBoolean(Search.class.getName() + ".skipPermissionCheck");
 
-    private final static Logger LOGGER = Logger.getLogger(Search.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(Search.class.getName());
 }

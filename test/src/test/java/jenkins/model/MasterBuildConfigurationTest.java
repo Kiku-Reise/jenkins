@@ -1,9 +1,8 @@
 package jenkins.model;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 import hudson.model.Node.Mode;
-
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
@@ -17,8 +16,8 @@ public class MasterBuildConfigurationTest {
     @Issue("JENKINS-23966")
     public void retainMasterLabelWhenNoSlaveDefined() throws Exception {
         Jenkins jenkins = j.getInstance();
-        
-        assertTrue("Test is for master with no slave", jenkins.getComputers().length == 1);
+
+        assertEquals("Test is for controller with no agent", 1, jenkins.getComputers().length);
         
         // set our own label & mode
         final String myTestLabel = "TestLabelx0123";
@@ -29,7 +28,7 @@ public class MasterBuildConfigurationTest {
         j.configRoundtrip();
         
         // make sure settings were not lost
-        assertTrue("Master's label is lost", myTestLabel.equals(jenkins.getLabelString()));
-        assertTrue("Master's mode is lost", Mode.EXCLUSIVE.equals(jenkins.getMode()));
+        assertEquals("Built in node's label is lost", myTestLabel, jenkins.getLabelString());
+        assertEquals("Built in node's mode is lost", Mode.EXCLUSIVE, jenkins.getMode());
     }
 }

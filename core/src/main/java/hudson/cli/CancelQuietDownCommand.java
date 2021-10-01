@@ -25,9 +25,8 @@
 package hudson.cli;
 
 import hudson.Extension;
-import jenkins.model.Jenkins;
-
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
 
 /**
  * Cancel previous quiet down Jenkins - preparation for a restart
@@ -47,7 +46,7 @@ public class CancelQuietDownCommand extends CLICommand {
 
     @Override
     protected int run() throws Exception {
-        Jenkins.getActiveInstance().doCancelQuietDown();
+        Jenkins.get().doCancelQuietDown();
         return 0;
     }
 }

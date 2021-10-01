@@ -23,21 +23,22 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import hudson.AbortException;
 import hudson.DescriptorExtensionList;
 import hudson.Extension;
 import hudson.ExtensionPoint;
-import hudson.AbortException;
+import hudson.Util;
 import hudson.cli.CLICommand;
 import hudson.util.DescriptorList;
-
-import java.io.Serializable;
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.Objects;
 import java.util.logging.Logger;
-import javax.annotation.CheckForNull;
-
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
-
+import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
@@ -91,8 +92,6 @@ import org.kohsuke.stapler.export.ExportedBean;
  * is then fed to {@link ParameterDefinition#createValue(StaplerRequest, JSONObject)} to
  * create {@link ParameterValue}s.
  *
- * TODO: what Jelly pages does this object need for rendering UI?
- * TODO: {@link ParameterValue} needs to have some mechanism to expose values to the build
  * @see StringParameterDefinition
  */
 @ExportedBean(defaultVisibility=3)
@@ -101,15 +100,22 @@ public abstract class ParameterDefinition implements
 
     private final String name;
 
-    private final String description;
+    private String description;
 
-    public ParameterDefinition(String name) {
-        this(name, null);
+    public ParameterDefinition(@NonNull String name) {
+        if (name == null) {
+            throw new IllegalArgumentException("Parameter name must be non-null");
+        }
+        this.name = name;
     }
 
-    public ParameterDefinition(String name, String description) {
-        this.name = name;
-        this.description = description;
+    /**
+     * @deprecated Prefer {@link #ParameterDefinition(String)} with a {@link org.kohsuke.stapler.DataBoundConstructor} and allow {@link #setDescription} to be used as needed
+     */
+    @Deprecated
+    public ParameterDefinition(@NonNull String name, String description) {
+        this(name);
+        setDescription(description);
     }
 
     /**
@@ -129,34 +135,43 @@ public abstract class ParameterDefinition implements
     }
     
     @Exported
+    @NonNull
     public String getName() {
         return name;
     }
 
     @Exported
+    @CheckForNull
     public String getDescription() {
         return description;
+    }
+
+    /**
+     * @since 2.281
+     */
+    @DataBoundSetter
+    public void setDescription(@CheckForNull String description) {
+        this.description = Util.fixEmpty(description);
     }
 
     /**
      * return parameter description, applying the configured MarkupFormatter for jenkins instance.
      * @since 1.521
      */
+    @CheckForNull
     public String getFormattedDescription() {
         try {
-            return Jenkins.getInstance().getMarkupFormatter().translate(description);
+            return Jenkins.get().getMarkupFormatter().translate(getDescription());
         } catch (IOException e) {
             LOGGER.warning("failed to translate description using configured markup formatter");
             return "";
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
+    @NonNull
     public ParameterDescriptor getDescriptor() {
-        return (ParameterDescriptor) Jenkins.getInstance().getDescriptorOrDie(getClass());
+        return (ParameterDescriptor) Jenkins.get().getDescriptorOrDie(getClass());
     }
 
     /**
@@ -220,10 +235,44 @@ public abstract class ParameterDefinition implements
     }
 
     /**
+     * Checks whether a given value is valid for this definition.
+     * @since 2.244
+     * @param value The value to validate.
+     * @return True if the value is valid for this definition. False if it is invalid.
+     */
+    public boolean isValid(ParameterValue value) {
+        // The base implementation just accepts the value.
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        return Jenkins.XSTREAM2.toXML(this).hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        ParameterDefinition other = (ParameterDefinition) obj;
+        if (!Objects.equals(getName(), other.getName()))
+            return false;
+        if (!Objects.equals(getDescription(), other.getDescription()))
+            return false;
+        String thisXml  = Jenkins.XSTREAM2.toXML(this);
+        String otherXml = Jenkins.XSTREAM2.toXML(other);
+        return thisXml.equals(otherXml);
+    }
+
+    /**
      * Returns all the registered {@link ParameterDefinition} descriptors.
      */
     public static DescriptorExtensionList<ParameterDefinition,ParameterDescriptor> all() {
-        return Jenkins.getInstance().<ParameterDefinition,ParameterDescriptor>getDescriptorList(ParameterDefinition.class);
+        return Jenkins.get().getDescriptorList(ParameterDefinition.class);
     }
 
     /**
@@ -232,7 +281,7 @@ public abstract class ParameterDefinition implements
      *      Use {@link #all()} for read access, and {@link Extension} for registration.
      */
     @Deprecated
-    public static final DescriptorList<ParameterDefinition> LIST = new DescriptorList<ParameterDefinition>(ParameterDefinition.class);
+    public static final DescriptorList<ParameterDefinition> LIST = new DescriptorList<>(ParameterDefinition.class);
 
     public abstract static class ParameterDescriptor extends
             Descriptor<ParameterDefinition> {

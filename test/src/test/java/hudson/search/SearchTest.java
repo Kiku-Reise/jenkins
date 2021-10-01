@@ -25,31 +25,28 @@ package hudson.search;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
+import com.gargoylesoftware.htmlunit.Page;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import hudson.model.FreeStyleProject;
 import hudson.model.ListView;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 import hudson.model.User;
 import hudson.model.View;
 import hudson.security.ACL;
 import hudson.security.ACLContext;
 import hudson.security.GlobalMatrixAuthorizationStrategy;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 import net.sf.json.JSONSerializer;
-
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
@@ -57,8 +54,6 @@ import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.JenkinsRule.WebClient;
 import org.jvnet.hudson.test.MockAuthorizationStrategy;
 import org.jvnet.hudson.test.MockFolder;
-
-import com.gargoylesoftware.htmlunit.Page;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -120,7 +115,7 @@ public class SearchTest {
         j.assertGoodStatus(result);
 
         URL resultUrl = result.getUrl();
-        assertTrue(resultUrl.toString().equals(j.getInstance().getRootUrl() + myFreeStyleProject.getUrl()));
+        assertEquals(j.getInstance().getRootUrl() + myFreeStyleProject.getUrl(), resultUrl.toString());
     }
 
     @Issue("JENKINS-24433")
@@ -136,7 +131,7 @@ public class SearchTest {
         j.assertGoodStatus(result);
 
         URL resultUrl = result.getUrl();
-        assertTrue(resultUrl.toString().equals(j.getInstance().getRootUrl() + myFreeStyleProject.getUrl()));
+        assertEquals(j.getInstance().getRootUrl() + myFreeStyleProject.getUrl(), resultUrl.toString());
     }
 
     @Test
@@ -391,18 +386,18 @@ public class SearchTest {
         j.jenkins.addView(new ListView("foo", j.jenkins));
 
         // SYSTEM can see all the views
-        assertEquals("two views exist", 2, Jenkins.getInstance().getViews().size());
+        assertEquals("two views exist", 2, Jenkins.get().getViews().size());
         List<SearchItem> results = new ArrayList<>();
         j.jenkins.getSearchIndex().suggest("foo", results);
         assertEquals("nonempty results list", 1, results.size());
 
 
         // Alice can't
-        assertFalse("no permission", j.jenkins.getView("foo").hasPermission(User.get("alice").impersonate(), View.READ));
-        ACL.impersonate(User.get("alice").impersonate(), new Runnable() {
+        assertFalse("no permission", j.jenkins.getView("foo").hasPermission2(User.get("alice").impersonate2(), View.READ));
+        ACL.impersonate2(User.get("alice").impersonate2(), new Runnable() {
             @Override
             public void run() {
-                assertEquals("no visible views", 0, Jenkins.getInstance().getViews().size());
+                assertEquals("no visible views", 0, Jenkins.get().getViews().size());
 
                 List<SearchItem> results = new ArrayList<>();
                 j.jenkins.getSearchIndex().suggest("foo", results);
@@ -441,7 +436,7 @@ public class SearchTest {
     }
 
     private List<SearchItem> suggest(SearchIndex index, String term) {
-        List<SearchItem> result = new ArrayList<SearchItem>();
+        List<SearchItem> result = new ArrayList<>();
         index.suggest(term, result);
         return result;
     }
@@ -482,6 +477,6 @@ public class SearchTest {
         j.assertGoodStatus(searchResult);
 
         URL resultUrl = searchResult.getUrl();
-        assertTrue(resultUrl.toString().equals(j.getInstance().getRootUrl() + freeStyleProject.getUrl()));
+        assertEquals(j.getInstance().getRootUrl() + freeStyleProject.getUrl(), resultUrl.toString());
     }
 }

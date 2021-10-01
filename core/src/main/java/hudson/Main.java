@@ -23,27 +23,27 @@
  */
 package hudson;
 
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import jenkins.util.SystemProperties;
+import com.thoughtworks.xstream.core.util.Base64Encoder;
 import hudson.util.DualOutputStream;
 import hudson.util.EncodingStream;
-import com.thoughtworks.xstream.core.util.Base64Encoder;
 import hudson.util.IOUtils;
-
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.HttpRetryException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import jenkins.util.SystemProperties;
 
 /**
  * Entry point to Hudson from command line.
@@ -152,9 +152,7 @@ public class Main {
                 // run the command
                 long start = System.currentTimeMillis();
 
-                List<String> cmd = new ArrayList<String>();
-                for( int i=1; i<args.length; i++ )
-                    cmd.add(args[i]);
+                List<String> cmd = new ArrayList<>(Arrays.asList(args).subList(1, args.length));
                 Proc proc = new Proc.LocalProc(cmd.toArray(new String[0]),(String[])null,System.in,
                     new DualOutputStream(System.out,new EncodingStream(os)));
 
@@ -221,7 +219,8 @@ public class Main {
     public static boolean isUnitTest = false;
 
     /**
-     * Set to true if we are running inside "mvn hpi:run" or "mvn hudson-dev:run"
+     * Set to true if we are running inside {@code mvn jetty:run}.
+     * This is also set if running inside {@code mvn hpi:run} since plugins parent POM 2.30.
      */
     public static boolean isDevelopmentMode = SystemProperties.getBoolean(Main.class.getName()+".development");
 

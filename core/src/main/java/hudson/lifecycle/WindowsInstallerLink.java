@@ -23,44 +23,35 @@
  */
 package hudson.lifecycle;
 
-import com.sun.jna.Native;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.AbortException;
+import hudson.Extension;
 import hudson.Functions;
 import hudson.Launcher.LocalLauncher;
 import hudson.model.ManagementLink;
 import hudson.model.TaskListener;
-import hudson.util.jna.Kernel32Utils;
-import hudson.util.jna.SHELLEXECUTEINFO;
-import hudson.util.jna.Shell32;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import jenkins.model.Jenkins;
-import hudson.AbortException;
-import hudson.Extension;
-import jenkins.util.SystemProperties;
 import hudson.util.StreamTaskListener;
 import hudson.util.jna.DotNet;
-import org.apache.commons.io.IOUtils;
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.servlet.ServletException;
+import jenkins.model.Jenkins;
+import jenkins.util.SystemProperties;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.output.ByteArrayOutputStream;
+import org.apache.tools.ant.DefaultLogger;
+import org.apache.tools.ant.Project;
+import org.apache.tools.ant.taskdefs.Move;
+import org.apache.tools.ant.types.FileSet;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.output.ByteArrayOutputStream;
-import org.apache.tools.ant.taskdefs.Move;
-import org.apache.tools.ant.Project;
-import org.apache.tools.ant.DefaultLogger;
-import org.apache.tools.ant.types.FileSet;
 import org.kohsuke.stapler.interceptor.RequirePOST;
-
-import javax.servlet.ServletException;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.logging.Logger;
-import java.util.logging.Level;
-import java.net.URL;
-
-import static hudson.util.jna.SHELLEXECUTEINFO.*;
 
 /**
  * {@link ManagementLink} that allows the installation as a Windows service.
@@ -84,20 +75,31 @@ public class WindowsInstallerLink extends ManagementLink {
         this.hudsonWar = jenkinsWar;
     }
 
+    @Override
     public String getIconFileName() {
         return "installer.gif";
     }
 
+    @Override
     public String getUrlName() {
         return "install";
     }
 
+    @Override
     public String getDisplayName() {
         return Messages.WindowsInstallerLink_DisplayName();
     }
 
+    @Override
     public String getDescription() {
         return Messages.WindowsInstallerLink_Description();
+    }
+
+
+    @NonNull
+    @Override
+    public Category getCategory() {
+        return Category.CONFIGURATION;
     }
 
     /**
@@ -112,29 +114,30 @@ public class WindowsInstallerLink extends ManagementLink {
      */
     @RequirePOST
     public void doDoInstall(StaplerRequest req, StaplerResponse rsp, @QueryParameter("dir") String _dir) throws IOException, ServletException {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
         if(installationDir!=null) {
             // installation already complete
             sendError("Installation is already complete",req,rsp);
             return;
         }
-        if(!DotNet.isInstalled(2,0)) {
-            sendError(".NET Framework 2.0 or later is required for this feature",req,rsp);
+        if(!DotNet.isInstalled(4,0)) {
+            sendError(".NET Framework 4.0 or later is required for this feature",req,rsp);
             return;
         }
 
-        File dir = new File(_dir).getAbsoluteFile();
-        dir.mkdirs();
+        final File dir = new File(_dir).getAbsoluteFile();
         if(!dir.exists()) {
-            sendError("Failed to create installation directory: "+dir,req,rsp);
-            return;
+            if (!dir.mkdirs()) {
+                sendError("Failed to create installation directory: "+dir,req,rsp);
+                return;
+            }
         }
 
         try {
             // copy files over there
             copy(req, rsp, dir, getClass().getResource("/windows-service/jenkins.exe"),         "jenkins.exe");
-            copy(req, rsp, dir, getClass().getResource("/windows-service/jenkins.exe.config"),  "jenkins.exe.config");
+            new File(dir, "jenkins.exe.config").delete();
             copy(req, rsp, dir, getClass().getResource("/windows-service/jenkins.xml"),         "jenkins.xml");
             if(!hudsonWar.getCanonicalFile().equals(new File(dir,"jenkins.war").getCanonicalFile()))
                 copy(req, rsp, dir, hudsonWar.toURI().toURL(), "jenkins.war");
@@ -145,7 +148,7 @@ public class WindowsInstallerLink extends ManagementLink {
             task.getLogger().println("Installing a service");
             int r = runElevated(new File(dir, "jenkins.exe"), "install", task, dir);
             if(r!=0) {
-                sendError(baos.toString(),req,rsp);
+                sendError(baos.toString(Charset.defaultCharset()),req,rsp);
                 return;
             }
 
@@ -174,7 +177,7 @@ public class WindowsInstallerLink extends ManagementLink {
 
     @RequirePOST
     public void doRestart(StaplerRequest req, StaplerResponse rsp) throws IOException, ServletException {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
         if(installationDir==null) {
             // if the user reloads the page after Hudson has restarted,
@@ -185,16 +188,19 @@ public class WindowsInstallerLink extends ManagementLink {
         }
 
         rsp.forward(this,"_restart",req);
-        final File oldRoot = Jenkins.getInstance().getRootDir();
+        final File oldRoot = Jenkins.get().getRootDir();
 
         // initiate an orderly shutdown after we finished serving this request
         new Thread("terminator") {
+            @SuppressFBWarnings(value = "DM_EXIT", justification = "Exit is really intended.")
+            @Override
             public void run() {
                 try {
                     Thread.sleep(1000);
 
                     // let the service start after we close our sockets, to avoid conflicts
                     Runtime.getRuntime().addShutdownHook(new Thread("service starter") {
+                        @Override
                         public void run() {
                             try {
                                 if(!oldRoot.equals(installationDir)) {
@@ -216,9 +222,7 @@ public class WindowsInstallerLink extends ManagementLink {
                                 int r = runElevated(
                                         new File(installationDir, "jenkins.exe"), "start", task, installationDir);
                                 task.getLogger().println(r==0?"Successfully started":"start service failed. Exit code="+r);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            } catch (InterruptedException e) {
+                            } catch (IOException | InterruptedException e) {
                                 e.printStackTrace();
                             }
                         }
@@ -231,7 +235,7 @@ public class WindowsInstallerLink extends ManagementLink {
                         }
                     });
 
-                    Jenkins.getInstance().cleanUp();
+                    Jenkins.get().cleanUp();
                     System.exit(0);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -250,7 +254,7 @@ public class WindowsInstallerLink extends ManagementLink {
     protected final void sendError(String message, StaplerRequest req, StaplerResponse rsp) throws ServletException, IOException {
         req.setAttribute("message",message);
         req.setAttribute("pre",true);
-        rsp.forward(Jenkins.getInstance(),"error",req);
+        rsp.forward(Jenkins.get(),"error",req);
     }
 
     /**
@@ -270,11 +274,9 @@ public class WindowsInstallerLink extends ManagementLink {
         if(war!=null && new File(war).exists()) {
             WindowsInstallerLink link = new WindowsInstallerLink(new File(war));
 
-            // in certain situations where we know the user is just trying Jenkins (like when Jenkins is launched
-            // from JNLP), also put this link on the navigation bar to increase
-            // visibility
+            // TODO possibly now unused (JNLP installation mode is long gone):
             if(SystemProperties.getString(WindowsInstallerLink.class.getName()+".prominent")!=null)
-                Jenkins.getInstance().getActions().add(link);
+                Jenkins.get().getActions().add(link);
 
             return link;
         }
@@ -284,42 +286,9 @@ public class WindowsInstallerLink extends ManagementLink {
 
     /**
      * Invokes jenkins.exe with a SCM management command.
-     *
-     * <p>
-     * If it fails in a way that indicates the presence of UAC, retry in an UAC compatible manner.
      */
     static int runElevated(File jenkinsExe, String command, TaskListener out, File pwd) throws IOException, InterruptedException {
-        try {
-            return new LocalLauncher(out).launch().cmds(jenkinsExe, command).stdout(out).pwd(pwd).join();
-        } catch (IOException e) {
-            if (e.getMessage().contains("CreateProcess") && e.getMessage().contains("=740")) {
-                // fall through
-            } else {
-                throw e;
-            }
-        }
-
-        // error code 740 is ERROR_ELEVATION_REQUIRED, indicating that
-        // we run in UAC-enabled Windows and we need to run this in an elevated privilege
-        SHELLEXECUTEINFO sei = new SHELLEXECUTEINFO();
-        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
-        sei.lpVerb = "runas";
-        sei.lpFile = jenkinsExe.getAbsolutePath();
-        sei.lpParameters = "/redirect redirect.log "+command;
-        sei.lpDirectory = pwd.getAbsolutePath();
-        sei.nShow = SW_HIDE;
-        if (!Shell32.INSTANCE.ShellExecuteEx(sei))
-            throw new IOException("Failed to shellExecute: "+ Native.getLastError());
-
-        try {
-            return Kernel32Utils.waitForExitProcess(sei.hProcess);
-        } finally {
-            try (InputStream fin = Files.newInputStream(new File(pwd,"redirect.log").toPath())) {
-                IOUtils.copy(fin, out.getLogger());
-            } catch (InvalidPathException e) {
-                // ignore;
-            }
-        }
+        return new LocalLauncher(out).launch().cmds(jenkinsExe, command).stdout(out).pwd(pwd).join();
     }
 
     private static final Logger LOGGER = Logger.getLogger(WindowsInstallerLink.class.getName());

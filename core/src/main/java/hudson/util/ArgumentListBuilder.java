@@ -24,21 +24,20 @@
  */
 package hudson.util;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
+import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Util;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.BitSet;
-import java.util.Properties;
-import java.util.Map.Entry;
-import java.io.Serializable;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
-import javax.annotation.Nonnull;
 
 /**
  * Used to build up arguments for a process invocation.
@@ -46,7 +45,7 @@ import javax.annotation.Nonnull;
  * @author Kohsuke Kawaguchi
  */
 public class ArgumentListBuilder implements Serializable, Cloneable {
-    private final List<String> args = new ArrayList<String>();
+    private final List<String> args = new ArrayList<>();
     /**
      * Bit mask indicating arguments that shouldn't be echoed-back (e.g., password)
      */
@@ -137,7 +136,7 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
     /**
      * @since 2.72
      */
-    public ArgumentListBuilder add(@Nonnull Iterable<String> args) {
+    public ArgumentListBuilder add(@NonNull Iterable<String> args) {
         for (String arg : args) {
             add(arg);
         }
@@ -158,7 +157,7 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
      */
     public ArgumentListBuilder addKeyValuePair(String prefix, String key, String value, boolean mask) {
         if(key==null) return this;
-        add(((prefix==null)?"-D":prefix)+key+'='+value, mask);
+        add((prefix == null ? "-D" : prefix) + key + '=' + value, mask);
         return this;
     }
 
@@ -169,7 +168,7 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
      * @since 1.114
      */
     public ArgumentListBuilder addKeyValuePairs(String prefix, Map<String,String> props) {
-        for (Entry<String,String> e : props.entrySet())
+        for (Map.Entry<String,String> e : props.entrySet())
             addKeyValuePair(prefix, e.getKey(), e.getValue(), false);
         return this;
     }
@@ -187,8 +186,8 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
      * @since 1.378
      */
     public ArgumentListBuilder addKeyValuePairs(String prefix, Map<String,String> props, Set<String> propsToMask) {
-        for (Entry<String,String> e : props.entrySet()) {
-            addKeyValuePair(prefix, e.getKey(), e.getValue(), (propsToMask != null) && propsToMask.contains(e.getKey()));
+        for (Map.Entry<String,String> e : props.entrySet()) {
+            addKeyValuePair(prefix, e.getKey(), e.getValue(), propsToMask != null && propsToMask.contains(e.getKey()));
         }
         return this;
     }
@@ -229,8 +228,8 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
 
         properties = Util.replaceMacro(properties, propertiesGeneratingResolver(vr));
 
-        for (Entry<Object,Object> entry : Util.loadProperties(properties).entrySet()) {
-            addKeyValuePair(prefix, (String)entry.getKey(), entry.getValue().toString(), (propsToMask != null) && propsToMask.contains(entry.getKey()));
+        for (Map.Entry<Object,Object> entry : Util.loadProperties(properties).entrySet()) {
+            addKeyValuePair(prefix, (String)entry.getKey(), entry.getValue().toString(), propsToMask != null && propsToMask.contains(entry.getKey()));
         }
         return this;
     }
@@ -244,12 +243,13 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
      *
      * @param original Resolution will be delegated to this resolver. Resolved
      *                 values will be escaped afterwards.
-     * @see <a href="https://jenkins-ci.org/issue/10539">JENKINS-10539</a>
+     * @see <a href="https://issues.jenkins.io/browse/JENKINS-10539">JENKINS-10539</a>
      */
     private static VariableResolver<String> propertiesGeneratingResolver(final VariableResolver<String> original) {
 
         return new VariableResolver<String>() {
 
+            @Override
             public String resolve(String name) {
                 final String value = original.resolve(name);
                 if (value == null) return null;
@@ -260,7 +260,7 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
     }
 
     public String[] toCommandArray() {
-        return args.toArray(new String[args.size()]);
+        return args.toArray(new String[0]);
     }
     
     @Override
@@ -350,11 +350,21 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
                     quotedArgs.append('"').append(c);
                     c = '"';
                 }
-                percent = (c == '%');
+                percent = c == '%';
                 if (quoted) quotedArgs.append(c);
             }
-            if(i == 0 && quoted) quotedArgs.insert(0, '"'); else if (i == 0 && !quoted) quotedArgs.append('"');
-            if (quoted) quotedArgs.append('"'); else quotedArgs.append(arg);
+            if (i == 0) {
+                if (quoted) {
+                    quotedArgs.insert(0, '"'); 
+                } else {
+                    quotedArgs.append('"');
+                }
+            }
+            if (quoted) {
+                quotedArgs.append('"');
+            } else {
+                quotedArgs.append(arg);
+            }
             
             windowsCommand.add(quotedArgs, mask.get(i));
         }
@@ -376,7 +386,7 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
     }
 
     private static boolean startQuoting(StringBuilder buf, String arg, int atIndex) {
-        buf.append('"').append(arg.substring(0, atIndex));
+        buf.append('"').append(arg, 0, atIndex);
         return true;
     }
 
@@ -414,6 +424,7 @@ public class ArgumentListBuilder implements Serializable, Cloneable {
     /**
      * Debug/error message friendly output.
      */
+    @Override
     public String toString() {
         StringBuilder buf = new StringBuilder();
         for (int i=0; i<args.size(); i++) {

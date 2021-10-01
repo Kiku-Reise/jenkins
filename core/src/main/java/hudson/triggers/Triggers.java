@@ -23,10 +23,9 @@
  */
 package hudson.triggers;
 
+import hudson.Extension;
 import hudson.model.Item;
 import hudson.util.DescriptorList;
-import hudson.Extension;
-
 import java.util.List;
 
 /**
@@ -51,7 +50,7 @@ public class Triggers {
 //    );
 
     /**
-     * Returns a subset of {@link TriggerDescriptor}s that applys to the given item.
+     * Returns a subset of {@link TriggerDescriptor}s that applies to the given item.
      *
      * @deprecated as of 1.286
      *      Use {@link Trigger#for_(Item)}.

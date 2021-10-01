@@ -1,25 +1,23 @@
 package hudson.model.queue;
 
-import com.google.common.collect.Iterables;
 import hudson.Extension;
-import jenkins.util.SystemProperties;
 import hudson.model.Computer;
 import hudson.model.Executor;
-import jenkins.model.Jenkins;
 import hudson.model.InvisibleAction;
 import hudson.model.Queue.BuildableItem;
 import hudson.model.queue.MappingWorksheet.ExecutorChunk;
 import hudson.model.queue.MappingWorksheet.ExecutorSlot;
 import hudson.model.queue.MappingWorksheet.Mapping;
 import hudson.model.queue.MappingWorksheet.WorkChunk;
-import java.util.concurrent.TimeUnit;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.StreamSupport;
+import jenkins.model.Jenkins;
+import jenkins.util.SystemProperties;
 
 /**
  * Experimental.
@@ -32,9 +30,9 @@ public class BackFiller extends LoadPredictor {
     @Override
     public Iterable<FutureLoad> predict(MappingWorksheet plan, Computer computer, long start, long end) {
         TimeRange timeRange = new TimeRange(start, end - start);
-        List<FutureLoad> loads = new ArrayList<FutureLoad>();
+        List<FutureLoad> loads = new ArrayList<>();
 
-        for (BuildableItem bi : Jenkins.getInstance().getQueue().getBuildableItems()) {
+        for (BuildableItem bi : Jenkins.get().getQueue().getBuildableItems()) {
             TentativePlan tp = bi.getAction(TentativePlan.class);
             if (tp==null) {// do this even for bi==plan.item ensures that we have FIFO semantics in tentative plans.
                 tp = makeTentativePlan(bi);
@@ -94,8 +92,8 @@ public class BackFiller extends LoadPredictor {
         recursion = true;
         try {
             // pretend for now that all executors are available and decide some assignment that's executable.
-            List<PseudoExecutorSlot> slots = new ArrayList<PseudoExecutorSlot>();
-            for (Computer c : Jenkins.getInstance().getComputers()) {
+            List<PseudoExecutorSlot> slots = new ArrayList<>();
+            for (Computer c : Jenkins.get().getComputers()) {
                 if (c.isOffline())  continue;
                 for (Executor e : c.getExecutors()) {
                     slots.add(new PseudoExecutorSlot(e));
@@ -104,13 +102,13 @@ public class BackFiller extends LoadPredictor {
 
             // also ignore all load predictions as we just want to figure out some executable assignment
             // and we are not trying to figure out if this task is executable right now.
-            MappingWorksheet worksheet = new MappingWorksheet(bi, slots, Collections.<LoadPredictor>emptyList());
-            Mapping m = Jenkins.getInstance().getQueue().getLoadBalancer().map(bi.task, worksheet);
+            MappingWorksheet worksheet = new MappingWorksheet(bi, slots, Collections.emptyList());
+            Mapping m = Jenkins.get().getQueue().getLoadBalancer().map(bi.task, worksheet);
             if (m==null)    return null;
 
             // figure out how many executors we need on each computer?
-            Map<Computer,Integer> footprint = new HashMap<Computer, Integer>();
-            for (Entry<WorkChunk, ExecutorChunk> e : m.toMap().entrySet()) {
+            Map<Computer,Integer> footprint = new HashMap<>();
+            for (Map.Entry<WorkChunk, ExecutorChunk> e : m.toMap().entrySet()) {
                 Computer c = e.getValue().computer;
                 Integer v = footprint.get(c);
                 if (v==null)    v = 0;
@@ -130,13 +128,12 @@ public class BackFiller extends LoadPredictor {
 
             // now, based on the real predicted loads, figure out the approximation of when we can
             // start executing this guy.
-            for (Entry<Computer, Integer> e : footprint.entrySet()) {
+            for (Map.Entry<Computer, Integer> e : footprint.entrySet()) {
                 Computer computer = e.getKey();
                 Timeline timeline = new Timeline();
                 for (LoadPredictor lp : LoadPredictor.all()) {
-                    for (FutureLoad fl : Iterables.limit(lp.predict(worksheet, computer, slot.start, slot.end),100)) {
-                        timeline.insert(fl.startTime, fl.startTime+fl.duration, fl.numExecutors);
-                    }
+                    StreamSupport.stream(lp.predict(worksheet, computer, slot.start, slot.end).spliterator(), false).limit(100).forEach(fl ->
+                            timeline.insert(fl.startTime, fl.startTime + fl.duration, fl.numExecutors));
                 }
 
                 Long x = timeline.fit(slot.start, slot.duration, computer.countExecutors()-e.getValue());

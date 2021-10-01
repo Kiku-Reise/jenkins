@@ -1,12 +1,11 @@
 package hudson.util;
 
-import hudson.Util;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.Stack;
+import java.util.stream.Collectors;
 
 /**
  * Traverses a directed graph and if it contains any cycle, throw an exception.
@@ -14,11 +13,11 @@ import java.util.Stack;
  * @author Kohsuke Kawaguchi
  */
 public abstract class CyclicGraphDetector<N> {
-    private final Set<N> visited = new HashSet<N>();
-    private final Set<N> visiting = new HashSet<N>();
-    private final Stack<N> path = new Stack<N>();
+    private final Set<N> visited = new HashSet<>();
+    private final Set<N> visiting = new HashSet<>();
+    private final Stack<N> path = new Stack<>();
 
-    private final List<N> topologicalOrder = new ArrayList<N>();
+    private final List<N> topologicalOrder = new ArrayList<>();
 
     public void run(Iterable<? extends N> allNodes) throws CycleDetectedException {
         for (N n : allNodes){
@@ -66,9 +65,6 @@ public abstract class CyclicGraphDetector<N> {
     
     /**
      * React on detected cycles - default implementation throws an exception.
-     * @param q
-     * @param cycle
-     * @throws CycleDetectedException
      */
     protected void reactOnCycle(N q, List<N> cycle) throws CycleDetectedException{
         throw new CycleDetectedException(cycle);
@@ -78,7 +74,7 @@ public abstract class CyclicGraphDetector<N> {
         public final List cycle;
 
         public CycleDetectedException(List cycle) {
-            super("Cycle detected: "+Util.join(cycle," -> "));
+            super("Cycle detected: " + cycle.stream().map(Object::toString).collect(Collectors.joining(" -> ")));
             this.cycle = cycle;
         }
     }

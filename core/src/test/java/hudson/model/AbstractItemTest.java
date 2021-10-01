@@ -1,23 +1,20 @@
-/**
- * 
- */
 package hudson.model;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
+import java.io.IOException;
 import java.util.Collection;
-
 import org.junit.Test;
+import org.jvnet.hudson.test.Issue;
 
 /**
  * @author kingfai
- *
  */
-@SuppressWarnings("unchecked")
 public class AbstractItemTest {
 
-    private class StubAbstractItem extends AbstractItem {
+    private static class StubAbstractItem extends AbstractItem {
 
         protected StubAbstractItem() {
             // sending in null as parent as I don't care for my current tests
@@ -31,7 +28,7 @@ public class AbstractItemTest {
         }
         
         /**
-         * Override save so that nothig happens when setDisplayName() is called
+         * Override save so that nothing happens when setDisplayName() is called
          */
         @Override
         public void save() {
@@ -58,7 +55,7 @@ public class AbstractItemTest {
     }
     
     @Test
-    public void testSearchNameIsName() throws Exception {
+    public void testSearchNameIsName() {
         final String name = "the item name jlrtlekjtekrjkjr";
         StubAbstractItem i = new StubAbstractItem();
         i.doSetName(name);
@@ -91,4 +88,51 @@ public class AbstractItemTest {
         assertEquals(displayName, i.getDisplayNameOrNull());
         assertEquals(displayName, i.getDisplayName());
     }
+
+    private static class NameNotEditableItem extends AbstractItem {
+
+        protected NameNotEditableItem(ItemGroup parent, String name){
+            super(parent, name);
+        }
+
+        @Override
+        public Collection<? extends Job> getAllJobs() {
+            return null;
+        }
+
+        @Override
+        public boolean isNameEditable() {
+            return false; //so far it's the default value, but it's good to be explicit for test.
+        }
+    }
+
+    @Test
+    @Issue("JENKINS-58571")
+    public void renameMethodShouldThrowExceptionWhenNotIsNameEditable() {
+
+        //GIVEN
+        NameNotEditableItem item = new NameNotEditableItem(null,"NameNotEditableItem");
+
+        //WHEN
+        final IOException e = assertThrows("An item with isNameEditable false must throw exception when trying to rename it.",
+                IOException.class, () -> item.renameTo("NewName"));
+
+        assertEquals("Trying to rename an item that does not support this operation.", e.getMessage());
+        assertEquals("NameNotEditableItem", item.getName());
+    }
+
+    @Test
+    @Issue("JENKINS-58571")
+    public void doConfirmRenameMustThrowFormFailureWhenNotIsNameEditable() throws IOException {
+
+        //GIVEN
+        NameNotEditableItem item = new NameNotEditableItem(null,"NameNotEditableItem");
+
+        //WHEN
+        final Failure f = assertThrows("An item with isNameEditable false must throw exception when trying to call doConfirmRename.",
+                Failure.class, () -> item.doConfirmRename("MyNewName"));
+        assertEquals("Trying to rename an item that does not support this operation.", f.getMessage());
+        assertEquals("NameNotEditableItem", item.getName());
+    }
+
 }

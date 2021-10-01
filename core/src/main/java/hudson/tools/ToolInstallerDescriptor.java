@@ -25,11 +25,14 @@
 package hudson.tools;
 
 import hudson.DescriptorExtensionList;
+import hudson.model.AutoCompletionCandidates;
 import hudson.model.Descriptor;
-import jenkins.model.Jenkins;
-
-import java.util.List;
+import hudson.model.labels.LabelExpression;
+import hudson.util.FormValidation;
 import java.util.ArrayList;
+import java.util.List;
+import jenkins.model.Jenkins;
+import org.kohsuke.stapler.QueryParameter;
 
 /**
  * Descriptor for a {@link ToolInstaller}.
@@ -48,18 +51,28 @@ public abstract class ToolInstallerDescriptor<T extends ToolInstaller> extends D
     }
 
     public static DescriptorExtensionList<ToolInstaller,ToolInstallerDescriptor<?>> all() {
-        return Jenkins.getInstance().<ToolInstaller,ToolInstallerDescriptor<?>>getDescriptorList(ToolInstaller.class);
+        return Jenkins.get().getDescriptorList(ToolInstaller.class);
     }
 
     /**
      * Filters {@link #all()} by eliminating things that are not applicable to the given type.
      */
     public static List<ToolInstallerDescriptor<?>> for_(Class<? extends ToolInstallation> type) {
-        List<ToolInstallerDescriptor<?>> r = new ArrayList<ToolInstallerDescriptor<?>>();
+        List<ToolInstallerDescriptor<?>> r = new ArrayList<>();
         for (ToolInstallerDescriptor<?> d : all())
             if(d.isApplicable(type))
                 r.add(d);
         return r;
+    }
+
+    @SuppressWarnings("unused")
+    public AutoCompletionCandidates doAutoCompleteLabel(@QueryParameter String value) {
+        return LabelExpression.autoComplete(value);
+    }
+
+    @SuppressWarnings("unused")
+    public FormValidation doCheckLabel(@QueryParameter String value) {
+        return LabelExpression.validate(value);
     }
 
 }

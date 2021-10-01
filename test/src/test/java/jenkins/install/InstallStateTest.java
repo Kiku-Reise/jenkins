@@ -23,12 +23,13 @@
  */
 package jenkins.install;
 
-import hudson.ExtensionList;
-import jenkins.model.Jenkins;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertSame;
+
+import hudson.ExtensionList;
+import jenkins.model.Jenkins;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -49,15 +50,15 @@ public class InstallStateTest {
     public JenkinsRule j = new JenkinsRule();
     
     @Test
-    public void shouldPefromCorrectConversionForAllNames() {
+    public void shouldPerformCorrectConversionForAllNames() {
         ExtensionList<InstallState> states = InstallState.all();
         for (InstallState state : states) {
             InstallState afterRoundtrip = forName(state.name());
             // It also prevents occasional name duplications
             assertThat("State after the roundtrip must be equal to the original state", 
                     afterRoundtrip, equalTo(state));
-            assertTrue("State " + state + " should return the extension point instance after deserialization", 
-                    afterRoundtrip == state);
+            assertSame("State " + state + " should return the extension point instance after deserialization", 
+                    afterRoundtrip, state);
         }
     }
     

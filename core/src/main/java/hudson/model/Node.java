@@ -25,6 +25,9 @@
 package hudson.model;
 
 import com.infradna.tool.bridge_method_injector.WithBridgeMethods;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.ExtensionPoint;
 import hudson.FilePath;
@@ -39,7 +42,6 @@ import hudson.remoting.Callable;
 import hudson.remoting.VirtualChannel;
 import hudson.security.ACL;
 import hudson.security.AccessControlled;
-import hudson.security.Permission;
 import hudson.slaves.Cloud;
 import hudson.slaves.ComputerListener;
 import hudson.slaves.NodeDescriptor;
@@ -50,7 +52,6 @@ import hudson.util.ClockDifference;
 import hudson.util.DescribableList;
 import hudson.util.EnumConverter;
 import hudson.util.TagCloud;
-import hudson.util.TagCloud.WeightFunction;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Collections;
@@ -58,14 +59,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
 import jenkins.util.io.OnMaster;
 import net.sf.json.JSONObject;
-import org.acegisecurity.Authentication;
 import org.jvnet.localizer.Localizable;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.ProtectedExternally;
@@ -74,6 +73,7 @@ import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
+import org.springframework.security.core.Authentication;
 
 /**
  * Base type of Jenkins agents (although in practice, you probably extend {@link Slave} to define a new agent type).
@@ -98,19 +98,22 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
 
     private static final Logger LOGGER = Logger.getLogger(Node.class.getName());
 
-    /** @see <a href="https://issues.jenkins-ci.org/browse/JENKINS-46652">JENKINS-46652</a> */
+    /** @see <a href="https://issues.jenkins.io/browse/JENKINS-46652">JENKINS-46652</a> */
+    @SuppressFBWarnings("MS_SHOULD_BE_FINAL")
     public static /* not final */ boolean SKIP_BUILD_CHECK_ON_FLYWEIGHTS = SystemProperties.getBoolean(Node.class.getName() + ".SKIP_BUILD_CHECK_ON_FLYWEIGHTS", true);
 
     /**
      * Newly copied agents get this flag set, so that Jenkins doesn't try to start/remove this node until its configuration
      * is saved once.
      */
-    protected volatile transient boolean holdOffLaunchUntilSave;
+    protected transient volatile boolean holdOffLaunchUntilSave;
 
+    @Override
     public String getDisplayName() {
         return getNodeName(); // default implementation
     }
 
+    @Override
     public String getSearchUrl() {
         Computer c = toComputer();
         if (c != null) {
@@ -124,13 +127,12 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
     }
 
     /**
-     * {@inheritDoc}
      * @since 1.635.
      */
     @Override
     public void save() throws IOException {
         // this should be a no-op unless this node instance is the node instance in Jenkins' list of nodes
-        // thus where Jenkins.getInstance() == null there is no list of nodes, so we do a no-op
+        // thus where Jenkins.get() == null there is no list of nodes, so we do a no-op
         // Nodes.updateNode(n) will only persist the node record if the node instance is in the list of nodes
         // so either path results in the same behaviour: the node instance is only saved if it is in the list of nodes
         // for all other cases we do not know where to persist the node record and hence we follow the default
@@ -148,7 +150,7 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
      *      "" if this is master
      */
     @Exported(visibility=999)
-    @Nonnull
+    @NonNull
     public abstract String getNodeName();
 
     /**
@@ -181,7 +183,7 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
     /**
      * Returns the number of {@link Executor}s.
      *
-     * This may be different from <code>getExecutors().size()</code>
+     * This may be different from {@code getExecutors().size()}
      * because it takes time to adjust the number of executors.
      */
     @Exported
@@ -204,7 +206,7 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
      */
     @CheckForNull
     public final Computer toComputer() {
-        AbstractCIBase ciBase = Jenkins.getInstance();
+        AbstractCIBase ciBase = Jenkins.get();
         return ciBase.getComputer(this);
     }
 
@@ -283,11 +285,7 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
      * Return the possibly empty tag cloud for the labels of this node.
      */
     public TagCloud<LabelAtom> getLabelCloud() {
-        return new TagCloud<LabelAtom>(getAssignedLabels(),new WeightFunction<LabelAtom>() {
-            public float weight(LabelAtom item) {
-                return item.getTiedJobCount();
-            }
-        });
+        return new TagCloud<>(getAssignedLabels(), Label::getTiedJobCount);
     }
     /**
      * Returns the possibly empty set of labels that are assigned to this node,
@@ -311,10 +309,9 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
      * Return all the labels assigned dynamically to this node.
      * This calls all the LabelFinder implementations with the node converts
      * the results into Labels.
-     * @return HashSet<Label>.
      */
     private HashSet<LabelAtom> getDynamicLabels() {
-        HashSet<LabelAtom> result = new HashSet<LabelAtom>();
+        HashSet<LabelAtom> result = new HashSet<>();
         for (LabelFinder labeler : LabelFinder.all()) {
             // Filter out any bad(null) results from plugins
             // for compatibility reasons, findLabels may return LabelExpression and not atom.
@@ -349,7 +346,7 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
     /**
      * Gets the special label that represents this node itself.
      */
-    @Nonnull
+    @NonNull
     @WithBridgeMethods(Label.class)
     public LabelAtom getSelfLabel() {
         return LabelAtom.get(getNodeName());
@@ -391,15 +388,16 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
             // flyweight tasks need to get executed somewhere, if every node
             if (!(item.task instanceof Queue.FlyweightTask && (
                     this instanceof Jenkins
-                            || Jenkins.getInstance().getNumExecutors() < 1
-                            || Jenkins.getInstance().getMode() == Mode.EXCLUSIVE)
+                            // TODO Why is the next operator a '||' instead of a '&&'?
+                            || Jenkins.get().getNumExecutors() < 1
+                            || Jenkins.get().getMode() == Mode.EXCLUSIVE)
             )) {
                 return CauseOfBlockage.fromMessage(Messages._Node_BecauseNodeIsReserved(getDisplayName()));   // this node is reserved for tasks that are tied to it
             }
         }
 
-        Authentication identity = item.authenticate();
-        if (!(SKIP_BUILD_CHECK_ON_FLYWEIGHTS && item.task instanceof Queue.FlyweightTask) && !hasPermission(identity, Computer.BUILD)) {
+        Authentication identity = item.authenticate2();
+        if (!(SKIP_BUILD_CHECK_ON_FLYWEIGHTS && item.task instanceof Queue.FlyweightTask) && !hasPermission2(identity, Computer.BUILD)) {
             // doesn't have a permission
             return CauseOfBlockage.fromMessage(Messages._Node_LackingBuildPermission(identity.getName(), getDisplayName()));
         }
@@ -407,7 +405,14 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
         // Check each NodeProperty to see whether they object to this node
         // taking the task
         for (NodeProperty prop: getNodeProperties()) {
-            CauseOfBlockage c = prop.canTake(item);
+            CauseOfBlockage c;
+            try {
+                c = prop.canTake(item);
+            } catch (Throwable t) {
+                // We cannot guarantee the task can be taken by this node because something wrong happened
+                LOGGER.log(Level.WARNING, t, () -> String.format("Exception evaluating if the node '%s' can take the task '%s'", getNodeName(), item.task.getName()));
+                c = CauseOfBlockage.fromMessage(Messages._Queue_ExceptionCanTake());
+            }
             if (c!=null)    return c;
         }
 
@@ -454,15 +459,15 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
         return new FilePath(ch,absolutePath);
     }
 
+    @Deprecated
     public FileSystemProvisioner getFileSystemProvisioner() {
-        // TODO: make this configurable or auto-detectable or something else
         return FileSystemProvisioner.DEFAULT;
     }
 
     /**
      * Gets the {@link NodeProperty} instances configured for this {@link Node}.
      */
-    public abstract @Nonnull DescribableList<NodeProperty<?>, NodePropertyDescriptor> getNodeProperties();
+    public abstract @NonNull DescribableList<NodeProperty<?>, NodePropertyDescriptor> getNodeProperties();
 
     /**
      * Gets the specified property or null if the property is not configured for this Node.
@@ -510,16 +515,18 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
         return NodeProperty.for_(this);
     }
 
+    @Override
     public ACL getACL() {
-        return Jenkins.getInstance().getAuthorizationStrategy().getACL(this);
+        return Jenkins.get().getAuthorizationStrategy().getACL(this);
     }
 
+    @Override
     public Node reconfigure(final StaplerRequest req, JSONObject form) throws FormException {
         if (form==null)     return null;
 
         final JSONObject jsonForProperties = form.optJSONObject("nodeProperties");
         final AtomicReference<BindInterceptor> old = new AtomicReference<>();
-        old.set(req.setBindListener(new BindInterceptor() {
+        old.set(req.setBindInterceptor(new BindInterceptor() {
             @Override
             public Object onConvert(Type targetType, Class targetTypeErasure, Object jsonSource) {
                 if (jsonForProperties != jsonSource) {
@@ -527,12 +534,10 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
                 }
 
                 try {
-                    DescribableList<NodeProperty<?>, NodePropertyDescriptor> tmp = new DescribableList<NodeProperty<?>, NodePropertyDescriptor>(Saveable.NOOP,getNodeProperties().toList());
+                    DescribableList<NodeProperty<?>, NodePropertyDescriptor> tmp = new DescribableList<>(Saveable.NOOP, getNodeProperties().toList());
                     tmp.rebuild(req, jsonForProperties, NodeProperty.all());
                     return tmp.toList();
-                } catch (FormException e) {
-                    throw new IllegalArgumentException(e);
-                } catch (IOException e) {
+                } catch (FormException | IOException e) {
                     throw new IllegalArgumentException(e);
                 }
             }
@@ -545,6 +550,7 @@ public abstract class Node extends AbstractModelObject implements Reconfigurable
         }
     }
 
+    @Override
     public abstract NodeDescriptor getDescriptor();
 
     /**

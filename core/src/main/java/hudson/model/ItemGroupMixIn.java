@@ -30,19 +30,7 @@ import hudson.security.AccessControlled;
 import hudson.util.CopyOnWriteMap;
 import hudson.util.Function1;
 import hudson.util.Secret;
-import jenkins.model.Jenkins;
-import jenkins.util.xml.XMLUtils;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletResponse;
-import javax.xml.transform.Source;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -51,8 +39,17 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletResponse;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
-import org.acegisecurity.AccessDeniedException;
+import jenkins.util.xml.XMLUtils;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.springframework.security.access.AccessDeniedException;
 import org.xml.sax.SAXException;
 
 /**
@@ -102,12 +99,8 @@ public abstract class ItemGroupMixIn {
     public static <K,V extends Item> Map<K,V> loadChildren(ItemGroup parent, File modulesDir, Function1<? extends K,? super V> key) {
         modulesDir.mkdirs(); // make sure it exists
 
-        File[] subdirs = modulesDir.listFiles(new FileFilter() {
-            public boolean accept(File child) {
-                return child.isDirectory();
-            }
-        });
-        CopyOnWriteMap.Tree<K,V> configurations = new CopyOnWriteMap.Tree<K,V>();
+        File[] subdirs = modulesDir.listFiles(File::isDirectory);
+        CopyOnWriteMap.Tree<K,V> configurations = new CopyOnWriteMap.Tree<>();
         for (File subdir : subdirs) {
             try {
                 // Try to retain the identity of an existing child object if we can.
@@ -135,11 +128,7 @@ public abstract class ItemGroupMixIn {
     /**
      * {@link Item} → name function.
      */
-    public static final Function1<String,Item> KEYED_BY_NAME = new Function1<String, Item>() {
-        public String call(Item item) {
-            return item.getName();
-        }
-    };
+    public static final Function1<String,Item> KEYED_BY_NAME = Item::getName;
 
     /**
      * Creates a {@link TopLevelItem} for example from the submission of the {@code /lib/hudson/newFromList/form} tag
@@ -175,7 +164,7 @@ public abstract class ItemGroupMixIn {
             String from = req.getParameter("from");
 
             // resolve a name to Item
-            Item src = Jenkins.getInstance().getItem(from, parent);
+            Item src = Jenkins.get().getItem(from, parent);
             if(src==null) {
                 if(Util.fixEmpty(from)==null)
                     throw new Failure("Specify which job to copy");
@@ -220,7 +209,7 @@ public abstract class ItemGroupMixIn {
     /**
      * Copies an existing {@link TopLevelItem} to a new name.
      */
-    @SuppressWarnings({"unchecked"})
+    @SuppressWarnings("unchecked")
     public synchronized <T extends TopLevelItem> T copy(T src, String name) throws IOException {
         acl.checkPermission(Item.CREATE);
         src.checkPermission(Item.EXTENDED_READ);
@@ -230,12 +219,13 @@ public abstract class ItemGroupMixIn {
             while (matcher.find()) {
                 if (Secret.decrypt(matcher.group(1)) != null) {
                     // AccessDeniedException2 does not permit a custom message, and anyway redirecting the user to the login screen is obviously pointless.
-                    throw new AccessDeniedException(Messages.ItemGroupMixIn_may_not_copy_as_it_contains_secrets_and_(src.getFullName(), Jenkins.getAuthentication().getName(), Item.PERMISSIONS.title, Item.EXTENDED_READ.name, Item.CONFIGURE.name));
+                    throw new AccessDeniedException(Messages.ItemGroupMixIn_may_not_copy_as_it_contains_secrets_and_(src.getFullName(), Jenkins.getAuthentication2().getName(), Item.PERMISSIONS.title, Item.EXTENDED_READ.name, Item.CONFIGURE.name));
                 }
             }
         }
         src.getDescriptor().checkApplicableIn(parent);
         acl.getACL().checkCreatePermission(parent, src.getDescriptor());
+        Jenkins.checkGoodName(name);
         ItemListener.checkBeforeCopy(src, parent);
 
         T result = (T)createProject(src.getDescriptor(),name,false);
@@ -255,7 +245,7 @@ public abstract class ItemGroupMixIn {
 
         add(result);
         ItemListener.fireOnCopied(src,result);
-        Jenkins.getInstance().rebuildDependencyGraphAsync();
+        Jenkins.get().rebuildDependencyGraphAsync();
 
         return result;
     }
@@ -263,8 +253,9 @@ public abstract class ItemGroupMixIn {
     public synchronized TopLevelItem createProjectFromXML(String name, InputStream xml) throws IOException {
         acl.checkPermission(Item.CREATE);
 
-        Jenkins.getInstance().getProjectNamingStrategy().checkName(name);
+        Jenkins.get().getProjectNamingStrategy().checkName(name);
         Items.verifyItemDoesNotAlreadyExist(parent, name, null);
+        Jenkins.checkGoodName(name);
 
         // place it as config.xml
         File configXml = Items.getConfigFile(getRootDirFor(name)).getFile();
@@ -272,7 +263,7 @@ public abstract class ItemGroupMixIn {
         dir.mkdirs();
         boolean success = false;
         try {
-            XMLUtils.safeTransform((Source)new StreamSource(xml), new StreamResult(configXml));
+            XMLUtils.safeTransform(new StreamSource(xml), new StreamResult(configXml));
 
             // load it
             TopLevelItem result = Items.whileUpdatingByXml(new NotReallyRoleSensitiveCallable<TopLevelItem,IOException>() {
@@ -281,25 +272,19 @@ public abstract class ItemGroupMixIn {
                 }
             });
 
-            success = acl.getACL().hasCreatePermission(Jenkins.getAuthentication(), parent, result.getDescriptor())
+            success = acl.getACL().hasCreatePermission2(Jenkins.getAuthentication2(), parent, result.getDescriptor())
                 && result.getDescriptor().isApplicableIn(parent);
 
             add(result);
 
             ItemListener.fireOnCreated(result);
-            Jenkins.getInstance().rebuildDependencyGraphAsync();
+            Jenkins.get().rebuildDependencyGraphAsync();
 
             return result;
-        } catch (TransformerException e) {
+        } catch (TransformerException | SAXException e) {
             success = false;
             throw new IOException("Failed to persist config.xml", e);
-        } catch (SAXException e) {
-            success = false;
-            throw new IOException("Failed to persist config.xml", e);
-        } catch (IOException e) {
-            success = false;
-            throw e;
-        } catch (RuntimeException e) {
+        } catch (IOException | RuntimeException e) {
             success = false;
             throw e;
         } finally {
@@ -316,14 +301,15 @@ public abstract class ItemGroupMixIn {
         type.checkApplicableIn(parent);
         acl.getACL().checkCreatePermission(parent, type);
 
-        Jenkins.getInstance().getProjectNamingStrategy().checkName(name);
+        Jenkins.get().getProjectNamingStrategy().checkName(name);
         Items.verifyItemDoesNotAlreadyExist(parent, name, null);
+        Jenkins.checkGoodName(name);
 
         TopLevelItem item = type.newInstance(parent, name);
         item.onCreatedFromScratch();
         item.save();
         add(item);
-        Jenkins.getInstance().rebuildDependencyGraphAsync();
+        Jenkins.get().rebuildDependencyGraphAsync();
 
         if (notify)
             ItemListener.fireOnCreated(item);

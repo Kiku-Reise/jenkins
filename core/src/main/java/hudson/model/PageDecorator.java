@@ -23,13 +23,12 @@
  */
 package hudson.model;
 
-import hudson.ExtensionPoint;
 import hudson.Extension;
 import hudson.ExtensionList;
+import hudson.ExtensionPoint;
 import hudson.util.DescriptorList;
-import jenkins.model.Jenkins;
-
 import java.util.List;
+import jenkins.model.Jenkins;
 
 /**
  * Participates in the rendering of HTML pages for all pages of Hudson.
@@ -83,10 +82,8 @@ public abstract class PageDecorator extends Descriptor<PageDecorator> implements
         super(self());
     }
 
-    // this will never work because Descriptor and Describable are the same thing.
-//    protected PageDecorator() {
-//    }
 
+    @Override
     public final Descriptor<PageDecorator> getDescriptor() {
         return this;
     }
@@ -108,12 +105,12 @@ public abstract class PageDecorator extends Descriptor<PageDecorator> implements
      *      Use {@link #all()} for read access, and use {@link Extension} for registration.
      */
     @Deprecated
-    public static final List<PageDecorator> ALL = (List)new DescriptorList<PageDecorator>(PageDecorator.class);
+    public static final List<PageDecorator> ALL = (List) new DescriptorList<>(PageDecorator.class);
 
     /**
      * Returns all the registered {@link PageDecorator} descriptors.
      */
     public static ExtensionList<PageDecorator> all() {
-        return Jenkins.getInstance().<PageDecorator,PageDecorator>getDescriptorList(PageDecorator.class);
+        return Jenkins.get().getDescriptorList(PageDecorator.class);
     }
 }

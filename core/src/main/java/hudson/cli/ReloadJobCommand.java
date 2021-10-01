@@ -27,15 +27,13 @@ import hudson.AbortException;
 import hudson.Extension;
 import hudson.model.AbstractItem;
 import hudson.model.Item;
-
 import hudson.model.Items;
-import jenkins.model.Jenkins;
-import org.kohsuke.args4j.Argument;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
+import org.kohsuke.args4j.Argument;
 
 /**
  * Reloads job from the disk.
@@ -60,10 +58,9 @@ public class ReloadJobCommand extends CLICommand {
     protected int run() throws Exception {
 
         boolean errorOccurred = false;
-        final Jenkins jenkins = Jenkins.getActiveInstance();
+        final Jenkins jenkins = Jenkins.get();
 
-        final HashSet<String> hs = new HashSet<>();
-        hs.addAll(jobs);
+        final HashSet<String> hs = new HashSet<>(jobs);
 
         for (String job_s: hs) {
             AbstractItem job = null;
@@ -84,14 +81,14 @@ public class ReloadJobCommand extends CLICommand {
                                 job_s, project.getFullName()));
                 }
 
-                job.checkPermission(AbstractItem.CONFIGURE);
+                job.checkPermission(Item.CONFIGURE);
                 job.doReload();
             } catch (Exception e) {
                 if(hs.size() == 1) {
                     throw e;
                 }
 
-                final String errorMsg = String.format(job_s + ": " + e.getMessage());
+                final String errorMsg = job_s + ": " + e.getMessage();
                 stderr.println(errorMsg);
                 errorOccurred = true;
                 continue;

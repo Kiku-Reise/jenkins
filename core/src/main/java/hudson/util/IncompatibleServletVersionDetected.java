@@ -24,7 +24,6 @@
 package hudson.util;
 
 import hudson.remoting.Which;
-
 import java.io.IOException;
 import java.net.URL;
 
@@ -45,6 +44,6 @@ public class IncompatibleServletVersionDetected extends BootFailure {
     }
     
     public URL getWhereServletIsLoaded() throws IOException {
-        return Which.jarURL(servletClass);
+        return Which.classFileUrl(servletClass);
     }
 }

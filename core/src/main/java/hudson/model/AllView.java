@@ -23,24 +23,22 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
+import hudson.Extension;
+import hudson.model.Descriptor.FormException;
+import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
+import javax.servlet.ServletException;
 import jenkins.util.SystemProperties;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
-
-import javax.servlet.ServletException;
-import java.io.IOException;
-import java.util.Collection;
-
-import hudson.model.Descriptor.FormException;
-import hudson.Extension;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
@@ -133,9 +131,9 @@ public class AllView extends View {
      * matching name is detected, in which case this will be the new name of the primary view.
      * @since 2.37
      */
-    @Nonnull
-    public static String migrateLegacyPrimaryAllViewLocalizedName(@Nonnull List<View> views,
-                                                                  @Nonnull String primaryView) {
+    @NonNull
+    public static String migrateLegacyPrimaryAllViewLocalizedName(@NonNull List<View> views,
+                                                                  @NonNull String primaryView) {
         if (DEFAULT_VIEW_NAME.equals(primaryView)) {
             // modern name, we are safe
             return primaryView;
@@ -185,6 +183,7 @@ public class AllView extends View {
             return true;
         }
 
+        @Override
         public String getDisplayName() {
             return Messages.Hudson_ViewName();
         }

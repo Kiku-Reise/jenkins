@@ -23,17 +23,16 @@
  */
 package hudson.util.jna;
 
-import hudson.Util;
-
-import java.io.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
-import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.WString;
+import com.sun.jna.ptr.IntByReference;
+import hudson.Util;
+import java.io.File;
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -115,7 +114,7 @@ public class Kernel32Utils {
     public static File getTempDir() {
         Memory buf = new Memory(1024);
         if (Kernel32.INSTANCE.GetTempPathW(512,buf)!=0) {// the first arg is number of wchar
-            return new File(buf.getString(0, true));
+            return new File(buf.getWideString(0));
         } else {
             return null;
         }

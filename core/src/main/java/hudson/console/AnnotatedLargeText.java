@@ -25,20 +25,13 @@
  */
 package hudson.console;
 
-import jenkins.model.Jenkins;
-import hudson.remoting.ObjectInputStreamEx;
-import java.util.concurrent.TimeUnit;
-import jenkins.security.CryptoConfidentialKey;
-import org.apache.commons.io.output.ByteArrayOutputStream;
-import org.kohsuke.stapler.Stapler;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.framework.io.ByteBuffer;
-import org.kohsuke.stapler.framework.io.LargeText;
+import static java.lang.Math.abs;
 
-import javax.crypto.Cipher;
-import javax.crypto.CipherInputStream;
-import javax.crypto.CipherOutputStream;
+import com.jcraft.jzlib.GZIPInputStream;
+import com.jcraft.jzlib.GZIPOutputStream;
+import edu.umd.cs.findbugs.annotations.CheckReturnValue;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.remoting.ObjectInputStreamEx;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -49,12 +42,19 @@ import java.io.Writer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-
-import com.jcraft.jzlib.GZIPInputStream;
-import com.jcraft.jzlib.GZIPOutputStream;
-
-import static java.lang.Math.abs;
+import java.util.concurrent.TimeUnit;
+import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
+import javax.crypto.CipherOutputStream;
+import jenkins.model.Jenkins;
+import jenkins.security.CryptoConfidentialKey;
+import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.jenkinsci.remoting.util.AnonymousClassWarnings;
+import org.kohsuke.stapler.Stapler;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.framework.io.ByteBuffer;
+import org.kohsuke.stapler.framework.io.LargeText;
 
 /**
  * Extension to {@link LargeText} that handles annotations by {@link ConsoleAnnotator}.
@@ -123,11 +123,11 @@ public class AnnotatedLargeText<T> extends LargeText {
 
                 try (ObjectInputStream ois = new ObjectInputStreamEx(new GZIPInputStream(
                         new CipherInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(base64.getBytes(StandardCharsets.UTF_8))), sym)),
-                        Jenkins.getInstance().pluginManager.uberClassLoader)) {
+                        Jenkins.get().pluginManager.uberClassLoader)) {
                     long timestamp = ois.readLong();
                     if (TimeUnit.HOURS.toMillis(1) > abs(System.currentTimeMillis()-timestamp))
                         // don't deserialize something too old to prevent a replay attack
-                        return (ConsoleAnnotator) ois.readObject();
+                        return getConsoleAnnotator(ois);
                 } catch (RuntimeException ex) {
                     throw new IOException("Could not decode input", ex);
                 }
@@ -139,6 +139,12 @@ public class AnnotatedLargeText<T> extends LargeText {
         return ConsoleAnnotator.initial(context);
     }
 
+    @SuppressFBWarnings(value = "OBJECT_DESERIALIZATION", justification = "Deserialization is protected by logic.")
+    private ConsoleAnnotator getConsoleAnnotator(ObjectInputStream ois) throws IOException, ClassNotFoundException {
+        return (ConsoleAnnotator) ois.readObject();
+    }
+
+    @CheckReturnValue
     @Override
     public long writeLogTo(long start, Writer w) throws IOException {
         if (isHtml())
@@ -151,6 +157,7 @@ public class AnnotatedLargeText<T> extends LargeText {
      * Strips annotations using a {@link PlainTextConsoleOutputStream}.
      * {@inheritDoc}
      */
+    @CheckReturnValue
     @Override
     public long writeLogTo(long start, OutputStream out) throws IOException {
         return super.writeLogTo(start, new PlainTextConsoleOutputStream(out));
@@ -160,10 +167,12 @@ public class AnnotatedLargeText<T> extends LargeText {
      * Calls {@link LargeText#writeLogTo(long, OutputStream)} without stripping annotations as {@link #writeLogTo(long, OutputStream)} would.
      * @since 1.577
      */
+    @CheckReturnValue
     public long writeRawLogTo(long start, OutputStream out) throws IOException {
         return super.writeLogTo(start, out);
     }
 
+    @CheckReturnValue
     public long writeHtmlTo(long start, Writer w) throws IOException {
         ConsoleAnnotationOutputStream<T> caw = new ConsoleAnnotationOutputStream<>(
                 w, createAnnotator(Stapler.getCurrentRequest()), context, charset);

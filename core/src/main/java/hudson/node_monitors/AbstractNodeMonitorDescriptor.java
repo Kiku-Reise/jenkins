@@ -24,16 +24,12 @@
 package hudson.node_monitors;
 
 import hudson.Util;
-import hudson.model.Computer;
-import hudson.model.Descriptor;
-import jenkins.model.Jenkins;
-import hudson.model.ComputerSet;
 import hudson.model.AdministrativeMonitor;
-import hudson.triggers.SafeTimerTask;
+import hudson.model.Computer;
+import hudson.model.ComputerSet;
+import hudson.model.Descriptor;
 import hudson.slaves.OfflineCause;
-import jenkins.util.Timer;
-
-import javax.annotation.concurrent.GuardedBy;
+import hudson.triggers.SafeTimerTask;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Date;
@@ -42,6 +38,10 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
+import jenkins.util.SystemProperties;
+import jenkins.util.Timer;
+import net.jcip.annotations.GuardedBy;
 
 /**
  * Convenient base class for common {@link NodeMonitor} implementation
@@ -53,13 +53,15 @@ import java.util.logging.Logger;
  * @author Kohsuke Kawaguchi
  */
 public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMonitor> {
+    private static long PERIOD = TimeUnit.MINUTES.toMillis(SystemProperties.getInteger(AbstractNodeMonitorDescriptor.class.getName() + ".periodMinutes", 60));
+
     /**
      * @deprecated as of 1.522
      *      Extend from {@link AbstractAsyncNodeMonitorDescriptor}
      */
     @Deprecated
     protected AbstractNodeMonitorDescriptor() {
-        this(HOUR);
+        this(PERIOD);
     }
 
     /**
@@ -77,7 +79,7 @@ public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMo
      */
     @Deprecated
     protected AbstractNodeMonitorDescriptor(Class<? extends NodeMonitor> clazz) {
-        this(clazz,HOUR);
+        this(clazz, PERIOD);
     }
 
     /**
@@ -94,6 +96,7 @@ public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMo
     private void schedule(long interval) {
         Timer.get()
             .scheduleAtFixedRate(new SafeTimerTask() {
+                @Override
                 public void doRun() {
                     triggerUpdate();
                 }
@@ -140,8 +143,8 @@ public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMo
      *      For all the computers, report the monitored values.
      */
     protected Map<Computer,T> monitor() throws InterruptedException {
-        Map<Computer,T> data = new HashMap<Computer,T>();
-        for( Computer c : Jenkins.getInstance().getComputers() ) {
+        Map<Computer,T> data = new HashMap<>();
+        for( Computer c : Jenkins.get().getComputers() ) {
             try {
                 Thread.currentThread().setName("Monitoring "+c.getDisplayName()+" for "+getDisplayName());
 
@@ -149,9 +152,7 @@ public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMo
                     data.put(c,null);
                 else
                     data.put(c,monitor(c));
-            } catch (RuntimeException e) {
-                LOGGER.log(Level.WARNING, "Failed to monitor "+c.getDisplayName()+" for "+getDisplayName(), e);
-            } catch (IOException e) {
+            } catch (RuntimeException | IOException e) {
                 LOGGER.log(Level.WARNING, "Failed to monitor "+c.getDisplayName()+" for "+getDisplayName(), e);
             } catch (InterruptedException e) {
                 throw (InterruptedException)new InterruptedException("Node monitoring "+c.getDisplayName()+" for "+getDisplayName()+" aborted.").initCause(e);
@@ -192,9 +193,7 @@ public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMo
     public String getTimestampString() {
         if (record==null)
             return Messages.AbstractNodeMonitorDescriptor_NoDataYet();
-//        return Messages.AbstractNodeMonitorDescriptor_DataObtainedSometimeAgo(
-//                Util.getTimeSpanString(System.currentTimeMillis()-record.timestamp));
-        return Util.getPastTimeString(System.currentTimeMillis()-record.timestamp);
+        return Util.getTimeSpanString(System.currentTimeMillis()-record.timestamp);
     }
 
     /**
@@ -293,7 +292,7 @@ public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMo
 
         private long timestamp;
 
-        public Record() {
+        Record() {
             super("Monitoring thread for "+getDisplayName()+" started on "+new Date());
         }
 
@@ -323,6 +322,4 @@ public abstract class AbstractNodeMonitorDescriptor<T> extends Descriptor<NodeMo
     }
 
     private static final Logger LOGGER = Logger.getLogger(AbstractNodeMonitorDescriptor.class.getName());
-
-    private static final long HOUR = 1000*60*60L;
 }

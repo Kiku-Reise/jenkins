@@ -24,15 +24,19 @@
 
 package jenkins.model;
 
+import static javax.servlet.http.HttpServletResponse.SC_CONFLICT;
+import static javax.servlet.http.HttpServletResponse.SC_CREATED;
+
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.Util;
 import hudson.cli.declarative.CLIMethod;
 import hudson.cli.declarative.CLIResolver;
 import hudson.model.Action;
+import hudson.model.BuildAuthorizationToken;
 import hudson.model.BuildableItem;
 import hudson.model.Cause;
 import hudson.model.CauseAction;
 import hudson.model.Item;
-import static hudson.model.Item.CONFIGURE;
 import hudson.model.Items;
 import hudson.model.Job;
 import hudson.model.ParameterDefinition;
@@ -55,10 +59,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.CheckForNull;
 import javax.servlet.ServletException;
-import static javax.servlet.http.HttpServletResponse.SC_CREATED;
-import static javax.servlet.http.HttpServletResponse.SC_CONFLICT;
 import jenkins.model.lazy.LazyBuildMixIn;
 import jenkins.triggers.SCMTriggerItem;
 import jenkins.util.TimeDuration;
@@ -113,7 +114,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
 
     /** @see BuildableItem#scheduleBuild(int, Cause) */
     public final boolean scheduleBuild(int quietPeriod, Cause c) {
-        return scheduleBuild2(quietPeriod, c != null ? Collections.<Action>singletonList(new CauseAction(c)) : Collections.<Action>emptyList()) != null;
+        return scheduleBuild2(quietPeriod, c != null ? Collections.singletonList(new CauseAction(c)) : Collections.emptyList()) != null;
     }
 
     /**
@@ -149,16 +150,16 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
         if (!asJob().isBuildable())
             return null;
 
-        List<Action> queueActions = new ArrayList<Action>(actions);
+        List<Action> queueActions = new ArrayList<>(actions);
         if (isParameterized() && Util.filter(queueActions, ParametersAction.class).isEmpty()) {
             queueActions.add(new ParametersAction(getDefaultParametersValues()));
         }
-        return Jenkins.getInstance().getQueue().schedule2(asJob(), quietPeriod, queueActions).getItem();
+        return Jenkins.get().getQueue().schedule2(asJob(), quietPeriod, queueActions).getItem();
     }
 
     private List<ParameterValue> getDefaultParametersValues() {
         ParametersDefinitionProperty paramDefProp = asJob().getProperty(ParametersDefinitionProperty.class);
-        ArrayList<ParameterValue> defValues = new ArrayList<ParameterValue>();
+        ArrayList<ParameterValue> defValues = new ArrayList<>();
 
         /*
          * This check is made ONLY if someone will call this method even if isParametrized() is false.
@@ -206,7 +207,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
             return;
         }
 
-        hudson.model.BuildAuthorizationToken.checkPermission(asJob(), asJob().getAuthToken(), req, rsp);
+        BuildAuthorizationToken.checkPermission(asJob(), asJob().getAuthToken(), req, rsp);
 
         if (pp != null) {
             pp._doBuild(req, rsp, delay);
@@ -214,7 +215,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
         }
 
 
-        Queue.Item item = Jenkins.getInstance().getQueue().schedule2(asJob(), delay.getTimeInSeconds(), getBuildCause(asJob(), req)).getItem();
+        Queue.Item item = Jenkins.get().getQueue().schedule2(asJob(), delay.getTimeInSeconds(), getBuildCause(asJob(), req)).getItem();
         if (item != null) {
             rsp.sendRedirect(SC_CREATED, req.getContextPath() + '/' + item.getUrl());
         } else {
@@ -227,7 +228,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
      */
     @SuppressWarnings("deprecation")
     public final void doBuildWithParameters(StaplerRequest req, StaplerResponse rsp, @QueryParameter TimeDuration delay) throws IOException, ServletException {
-        hudson.model.BuildAuthorizationToken.checkPermission(asJob(), asJob().getAuthToken(), req, rsp);
+        BuildAuthorizationToken.checkPermission(asJob(), asJob().getAuthToken(), req, rsp);
 
         ParametersDefinitionProperty pp = asJob().getProperty(ParametersDefinitionProperty.class);
         if (!asJob().isBuildable()) {
@@ -246,7 +247,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
     @RequirePOST
     public final void doCancelQueue( StaplerRequest req, StaplerResponse rsp ) throws IOException, ServletException {
         asJob().checkPermission(Item.CANCEL);
-        Jenkins.getInstance().getQueue().cancel(asJob());
+        Jenkins.get().getQueue().cancel(asJob());
         rsp.forwardToPreviousPage(req);
     }
 
@@ -269,7 +270,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
     public static CauseAction getBuildCause(ParameterizedJob job, StaplerRequest req) {
         Cause cause;
         @SuppressWarnings("deprecation")
-        hudson.model.BuildAuthorizationToken authToken = job.getAuthToken();
+        BuildAuthorizationToken authToken = job.getAuthToken();
         if (authToken != null && authToken.getToken() != null && req.getParameter("token") != null) {
             // Optional additional cause text when starting via token
             String causeText = req.getParameter("cause");
@@ -285,7 +286,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
      * @see #getBuildNowText
      * @since 1.624
      */
-    public static final AlternativeUiTextProvider.Message<ParameterizedJob> BUILD_NOW_TEXT = new AlternativeUiTextProvider.Message<ParameterizedJob>();
+    public static final AlternativeUiTextProvider.Message<ParameterizedJob> BUILD_NOW_TEXT = new AlternativeUiTextProvider.Message<>();
 
     /**
      * Suggested implementation of {@link ParameterizedJob#getBuildNowText}.
@@ -327,9 +328,9 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
         @SuppressWarnings("rawtypes")
         @CLIResolver
         static ParameterizedJob resolveForCLI(@Argument(required=true, metaVar="NAME", usage="Job name") String name) throws CmdLineException {
-            ParameterizedJob item = Jenkins.getInstance().getItemByFullName(name, ParameterizedJob.class);
+            ParameterizedJob item = Jenkins.get().getItemByFullName(name, ParameterizedJob.class);
             if (item == null) {
-                ParameterizedJob project = Items.findNearest(ParameterizedJob.class, name, Jenkins.getInstance());
+                ParameterizedJob project = Items.findNearest(ParameterizedJob.class, name, Jenkins.get());
                 throw new CmdLineException(null, project == null ?
                         hudson.model.Messages.AbstractItem_NoSuchJobExistsWithoutSuggestion(name) :
                         hudson.model.Messages.AbstractItem_NoSuchJobExists(name, project.getFullName()));
@@ -351,14 +352,14 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
         }
 
         @SuppressWarnings("deprecation")
-        @CheckForNull hudson.model.BuildAuthorizationToken getAuthToken();
+        @CheckForNull BuildAuthorizationToken getAuthToken();
 
         /**
          * Quiet period for the job.
          * @return by default, {@link Jenkins#getQuietPeriod}
          */
         default int getQuietPeriod() {
-            return Jenkins.getInstance().getQuietPeriod();
+            return Jenkins.get().getQuietPeriod();
         }
 
         /**
@@ -435,7 +436,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
                 rsp.sendError(404);
                 return;
             }
-            hudson.model.BuildAuthorizationToken.checkPermission((Job) this, getAuthToken(), req, rsp);
+            BuildAuthorizationToken.checkPermission((Job) this, getAuthToken(), req, rsp);
             ((SCMTriggerItem) this).schedulePolling();
             rsp.sendRedirect(".");
         }
@@ -480,7 +481,7 @@ public abstract class ParameterizedJobMixIn<JobT extends Job<JobT, RunT> & Param
             }
             setDisabled(b);
             if (b) {
-                Jenkins.getInstance().getQueue().cancel(this);
+                Jenkins.get().getQueue().cancel(this);
             }
             save();
             ItemListener.fireOnUpdated(this);

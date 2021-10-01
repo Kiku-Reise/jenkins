@@ -157,6 +157,7 @@ ComboBox.onKeyDown = function(e) {
 		case 27: // escape
 			this.comboBox.hideDropdown();
 			capture();
+			break;
 		case 38: // up arrow
 			this.comboBox.selectPrevious();
 			capture();
@@ -246,7 +247,7 @@ ComboBox.prototype.populateDropdown = function() {
 		for (var i = 0; i < this.availableItems.length; i++) {
 			var item = document.createElement("div");
 			item.className = "comboBoxItem";
-			item.innerHTML = this.availableItems[i];
+			item.innerText = this.availableItems[i];
 			item.id = "item_" + this.availableItems[i];
 			item.comboBox = this;
 			item.comboBoxIndex = i;
@@ -290,7 +291,7 @@ ComboBox.prototype.chooseSelection = function() {
 		if (this.getConfigParam("allowMultipleValues", false)) {
 			var currentValue = "";
 			var delim = this.getConfigParam("valueDelimiter", ",");
-			values = this.field.value.split(delim);
+			var values = this.field.value.split(delim);
 			for (var j = 0; j < values.length - 1; j++) {
 				currentValue = Utilities.listAppend(currentValue, values[j], delim);
 			}

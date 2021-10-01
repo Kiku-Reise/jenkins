@@ -1,6 +1,6 @@
 package hudson.cli;
 
-import com.google.common.collect.Lists;
+import static org.junit.Assert.assertEquals;
 
 import hudson.Functions;
 import hudson.Launcher;
@@ -10,17 +10,21 @@ import hudson.model.Item;
 import hudson.model.User;
 import hudson.util.ProcessTree;
 import hudson.util.StreamTaskListener;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import jenkins.model.Jenkins;
@@ -29,9 +33,11 @@ import jenkins.security.apitoken.ApiTokenTestHelper;
 import jenkins.util.FullDuplexHttpService;
 import jenkins.util.Timer;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.input.NullInputStream;
+import org.apache.commons.io.output.CountingOutputStream;
+import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.io.output.TeeOutputStream;
-import static org.junit.Assert.*;
-
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -41,7 +47,7 @@ import org.jvnet.hudson.test.LoggerRule;
 import org.jvnet.hudson.test.MockAuthorizationStrategy;
 import org.jvnet.hudson.test.TestExtension;
 import org.jvnet.hudson.test.recipes.PresetData;
-import org.jvnet.hudson.test.recipes.PresetData.DataSet;
+import org.kohsuke.args4j.Option;
 
 public class CLIActionTest {
     @Rule
@@ -53,10 +59,8 @@ public class CLIActionTest {
     @Rule
     public LoggerRule logging = new LoggerRule();
 
-    private ExecutorService pool;
-
     @Test
-    @PresetData(DataSet.NO_ANONYMOUS_READACCESS)
+    @PresetData(PresetData.DataSet.NO_ANONYMOUS_READACCESS)
     @Issue("SECURITY-192")
     public void serveCliActionToAnonymousUserWithoutPermissions() throws Exception {
         JenkinsRule.WebClient wc = j.createWebClient();
@@ -87,7 +91,6 @@ public class CLIActionTest {
         // @CLIMethod:
         assertExitCode(6, false, jar, "disable-job", "p"); // AccessDeniedException from CLIRegisterer?
         assertExitCode(0, true, jar, "disable-job", "p");
-        // If we have anonymous read access, then the situation is simpler.
         j.jenkins.setAuthorizationStrategy(new MockAuthorizationStrategy().grant(Jenkins.ADMINISTER).everywhere().to(ADMIN).grant(Jenkins.READ, Item.READ).everywhere().toEveryone());
         assertExitCode(6, false, jar, "get-job", "p"); // AccessDeniedException from AbstractItem.writeConfigDotXml
         assertExitCode(0, true, jar, "get-job", "p"); // works with API tokens
@@ -98,10 +101,10 @@ public class CLIActionTest {
     private static final String ADMIN = "admin@mycorp.com";
 
     private void assertExitCode(int code, boolean useApiToken, File jar, String... args) throws IOException, InterruptedException {
-        List<String> commands = Lists.newArrayList("java", "-jar", jar.getAbsolutePath(), "-s", j.getURL().toString(), /* not covering SSH keys in this test */ "-noKeyAuth");
+        List<String> commands = new ArrayList<>(Arrays.asList("java", "-jar", jar.getAbsolutePath(), "-s", j.getURL().toString(), /* TODO until it is the default */ "-webSocket"));
         if (useApiToken) {
             commands.add("-auth");
-            commands.add(ADMIN + ":" + User.get(ADMIN).getProperty(ApiTokenProperty.class).getApiToken());
+            commands.add(ADMIN + ":" + User.getOrCreateByIdOrFullName(ADMIN).getProperty(ApiTokenProperty.class).getApiToken());
         }
         commands.addAll(Arrays.asList(args));
         final Launcher.LocalLauncher launcher = new Launcher.LocalLauncher(StreamTaskListener.fromStderr());
@@ -137,7 +140,8 @@ public class CLIActionTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         assertEquals(0, new Launcher.LocalLauncher(StreamTaskListener.fromStderr()).launch().cmds(
             "java", "-Dfile.encoding=ISO-8859-2", "-Duser.language=cs", "-Duser.country=CZ", "-jar", jar.getAbsolutePath(),
-                "-s", j.getURL().toString()./* just checking */replaceFirst("/$", ""), "-noKeyAuth", "test-diagnostic").
+                "-webSocket", // TODO as above
+                "-s", j.getURL().toString()./* just checking */replaceFirst("/$", ""), "test-diagnostic").
             stdout(baos).stderr(System.err).join());
         assertEquals("encoding=ISO-8859-2 locale=cs_CZ", baos.toString().trim());
         // TODO test that stdout/stderr are in expected encoding (not true of -remoting mode!)
@@ -155,7 +159,9 @@ public class CLIActionTest {
         PipedOutputStream pos = new PipedOutputStream(pis);
         PrintWriter pw = new PrintWriter(new TeeOutputStream(pos, System.err), true);
         Proc proc = new Launcher.LocalLauncher(StreamTaskListener.fromStderr()).launch().cmds(
-            "java", "-jar", jar.getAbsolutePath(), "-s", j.getURL().toString(), "-noKeyAuth", "groovysh").
+            "java", "-jar", jar.getAbsolutePath(), "-s", j.getURL().toString(),
+                "-webSocket", // TODO as above
+                "groovysh").
             stdout(new TeeOutputStream(baos, System.out)).stderr(System.err).stdin(pis).start();
         while (!baos.toString().contains("000")) { // cannot just search for, say, "groovy:000> " since there are ANSI escapes there (cf. StringEscapeUtils.escapeJava)
             Thread.sleep(100);
@@ -164,7 +170,6 @@ public class CLIActionTest {
         while (!baos.toString().contains("121")) { // ditto not "===> 121"
             Thread.sleep(100);
         }
-        Thread.sleep(31_000); // aggravate org.eclipse.jetty.io.IdleTimeout (cf. AbstractConnector._idleTimeout)
         pw.println("11 * 11 * 11");
         while (!baos.toString().contains("1331")) {
             Thread.sleep(100);
@@ -212,6 +217,75 @@ public class CLIActionTest {
             return 0;
         }
 
+    }
+
+    @Issue("JENKINS-64294")
+    @Test
+    public void largeTransferWebSocket() throws Exception {
+        logging.record(CLIAction.class, Level.FINE);
+        File jar = tmp.newFile("jenkins-cli.jar");
+        FileUtils.copyURLToFile(j.jenkins.getJnlpJars("jenkins-cli.jar").getURL(), jar);
+        CountingOutputStream cos = new CountingOutputStream(NullOutputStream.NULL_OUTPUT_STREAM);
+        long size = /*999_*/999_999;
+        // Download:
+        assertEquals(0, new Launcher.LocalLauncher(StreamTaskListener.fromStderr()).launch().cmds(
+            "java", "-jar", jar.getAbsolutePath(),
+                "-webSocket",
+                "-s", j.getURL().toString(),
+                "large-download",
+                "-size", Long.toString(size)).
+            stdout(cos).stderr(System.err).join());
+        assertEquals(size, cos.getByteCount());
+        // Upload:
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        assertEquals(0, new Launcher.LocalLauncher(StreamTaskListener.fromStderr()).launch().cmds(
+            "java", "-jar", jar.getAbsolutePath(),
+                "-webSocket",
+                "-s", j.getURL().toString(),
+                "large-upload").
+            stdin(new NullInputStream(size)).
+            stdout(baos).stderr(System.err).join());
+        assertEquals("received " + size + " bytes", baos.toString().trim());
+    }
+
+    @TestExtension("largeTransferWebSocket")
+    public static final class LargeUploadCommand extends CLICommand {
+        @Override
+        protected int run() throws Exception {
+            try (InputStream is = new BufferedInputStream(stdin); CountingOutputStream cos = new CountingOutputStream(NullOutputStream.NULL_OUTPUT_STREAM)) {
+                System.err.println("starting upload");
+                long start = System.nanoTime();
+                IOUtils.copyLarge(is, cos);
+                System.err.printf("finished upload in %.1fs%n", (System.nanoTime() - start) / 1_000_000_000.0);
+                stdout.println("received " + cos.getByteCount() + " bytes");
+                stdout.flush();
+            }
+            return 0;
+        }
+        @Override
+        public String getShortDescription() {
+            return "";
+        }
+    }
+
+    @TestExtension("largeTransferWebSocket")
+    public static final class LargeDownloadCommand extends CLICommand {
+        @Option(name = "-size", required = true)
+        public int size;
+        @Override
+        protected int run() throws Exception {
+            try (OutputStream os = new BufferedOutputStream(stdout)) {
+                System.err.println("starting download");
+                long start = System.nanoTime();
+                IOUtils.copyLarge(new NullInputStream(size), os);
+                System.err.printf("finished download in %.1fs%n", (System.nanoTime() - start) / 1_000_000_000.0);
+            }
+            return 0;
+        }
+        @Override
+        public String getShortDescription() {
+            return "";
+        }
     }
 
 }

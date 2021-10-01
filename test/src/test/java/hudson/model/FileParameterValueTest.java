@@ -23,10 +23,26 @@
  */
 package hudson.model;
 
+import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import com.gargoylesoftware.htmlunit.Page;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import com.gargoylesoftware.htmlunit.util.NameValuePair;
 import hudson.FilePath;
 import hudson.Functions;
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.junit.Assume;
 import org.junit.Rule;
@@ -34,19 +50,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
-import org.kohsuke.stapler.Function;
-
-import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collections;
-
-import static org.hamcrest.CoreMatchers.allOf;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import org.jvnet.hudson.test.recipes.LocalData;
 
 public class FileParameterValueTest {
     @Rule
@@ -71,7 +75,7 @@ public class FileParameterValueTest {
         
         String uploadedContent = "test-content";
         File uploadedFile = tmp.newFile();
-        FileUtils.write(uploadedFile, uploadedContent);
+        FileUtils.write(uploadedFile, uploadedContent, StandardCharsets.UTF_8);
         
         FreeStyleBuild build = p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
                 new FileParameterValue("../../../../../root-level.txt", uploadedFile, "uploaded-file.txt")
@@ -94,7 +98,64 @@ public class FileParameterValueTest {
         // overlong utf-8 encoding
         checkUrlNot200AndNotContains(wc, build.getUrl() + "parameters/parameter/%c0%2e%c0%2e%c0%af%c0%2e%c0%2e%c0%af%c0%2e%c0%2e%c0%af%c0%2e%c0%2e%c0%af%c0%2e%c0%2e%c0%afroot-level.txt/uploaded-file.txt", uploadedContent);
     }
-    
+
+    @Test
+    @Issue("SECURITY-1424")
+    public void fileParameter_cannotCreateFile_outsideOfBuildFolder_SEC1424() throws Exception {
+        // you can test the behavior before the correction by setting FileParameterValue.ALLOW_FOLDER_TRAVERSAL_OUTSIDE_WORKSPACE to true
+
+        FilePath root = j.jenkins.getRootPath();
+
+        FreeStyleProject p = j.createFreeStyleProject();
+        p.addProperty(new ParametersDefinitionProperty(Collections.singletonList(
+                new FileParameterDefinition("dir/../../../pwned", null)
+        )));
+
+        assertThat(root.child("pwned").exists(), equalTo(false));
+
+        String uploadedContent = "test-content";
+        File uploadedFile = tmp.newFile();
+        FileUtils.write(uploadedFile, uploadedContent, StandardCharsets.UTF_8);
+
+        FreeStyleBuild build = p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
+                new FileParameterValue("dir/../../../pwned", uploadedFile, "uploaded-file.txt")
+        )).get();
+
+        assertThat(build.getResult(), equalTo(Result.FAILURE));
+        assertThat(root.child("pwned").exists(), equalTo(false));
+
+        // ensure also the file is not reachable by request
+        JenkinsRule.WebClient wc = j.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+    }
+
+    @Test
+    public void fileParameter_cannotCreateFile_outsideOfBuildFolder_LeadingDoubleDot() throws Exception {
+        FilePath root = j.jenkins.getRootPath();
+
+        FreeStyleProject p = j.createFreeStyleProject();
+        p.addProperty(new ParametersDefinitionProperty(Collections.singletonList(
+                new FileParameterDefinition("../pwned", null)
+        )));
+
+        assertThat(root.child("pwned").exists(), equalTo(false));
+
+        String uploadedContent = "test-content";
+        File uploadedFile = tmp.newFile();
+        FileUtils.write(uploadedFile, uploadedContent, StandardCharsets.UTF_8);
+
+        FreeStyleBuild build = p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
+                new FileParameterValue("../pwned", uploadedFile, "uploaded-file.txt")
+        )).get();
+
+        assertThat(build.getResult(), equalTo(Result.FAILURE));
+        assertThat(root.child("pwned").exists(), equalTo(false));
+
+        // ensure also the file is not reachable by request
+        JenkinsRule.WebClient wc = j.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+    }
+
     private void checkUrlNot200AndNotContains(JenkinsRule.WebClient wc, String url, String contentNotPresent) throws Exception {
         Page pageForEncoded = wc.goTo(url, null);
         assertThat(pageForEncoded.getWebResponse().getStatusCode(), not(equalTo(200)));
@@ -104,7 +165,7 @@ public class FileParameterValueTest {
     @Test
     @Issue("SECURITY-1074")
     public void fileParameter_cannotCreateFile_outsideOfBuildFolder_backslashEdition() throws Exception {
-        Assume.assumeTrue("Backslash are only dangerous on Windows", Functions.isWindows());
+        Assume.assumeTrue("Backslashes are only dangerous on Windows", Functions.isWindows());
         
         // you can test the behavior before the correction by setting FileParameterValue.ALLOW_FOLDER_TRAVERSAL_OUTSIDE_WORKSPACE to true
     
@@ -119,7 +180,7 @@ public class FileParameterValueTest {
         
         String uploadedContent = "test-content";
         File uploadedFile = tmp.newFile();
-        FileUtils.write(uploadedFile, uploadedContent);
+        FileUtils.write(uploadedFile, uploadedContent, StandardCharsets.UTF_8);
         
         FreeStyleBuild build = p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
                 new FileParameterValue("..\\..\\..\\..\\..\\root-level.txt", uploadedFile, "uploaded-file.txt")
@@ -148,7 +209,7 @@ public class FileParameterValueTest {
         
         String uploadedContent = "test-content";
         File uploadedFile = tmp.newFile();
-        FileUtils.write(uploadedFile, uploadedContent);
+        FileUtils.write(uploadedFile, uploadedContent, StandardCharsets.UTF_8);
         
         FreeStyleBuild build = p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
                 new FileParameterValue(".", uploadedFile, "uploaded-file.txt")
@@ -176,7 +237,7 @@ public class FileParameterValueTest {
         
         String uploadedContent = "test-content";
         File uploadedFile = tmp.newFile();
-        FileUtils.write(uploadedFile, uploadedContent);
+        FileUtils.write(uploadedFile, uploadedContent, StandardCharsets.UTF_8);
         
         FreeStyleBuild build = p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
                 new FileParameterValue("..", uploadedFile, "uploaded-file.txt")
@@ -210,7 +271,7 @@ public class FileParameterValueTest {
         
         String uploadedContent = "test-content";
         File uploadedFile = tmp.newFile();
-        FileUtils.write(uploadedFile, uploadedContent);
+        FileUtils.write(uploadedFile, uploadedContent, StandardCharsets.UTF_8);
         
         FreeStyleBuild build = p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
                 new FileParameterValue("../../../../../root-level.txt", uploadedFile, "uploaded-file.txt")
@@ -235,9 +296,9 @@ public class FileParameterValueTest {
         )));
         
         File uploadedFile1 = tmp.newFile();
-        FileUtils.write(uploadedFile1, "test1");
+        FileUtils.write(uploadedFile1, "test1", StandardCharsets.UTF_8);
         File uploadedFile2 = tmp.newFile();
-        FileUtils.write(uploadedFile2, "test2");
+        FileUtils.write(uploadedFile2, "test2", StandardCharsets.UTF_8);
         
         FreeStyleBuild build = j.assertBuildStatusSuccess(p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
                 new FileParameterValue("direct-child1.txt", uploadedFile1, "uploaded-file-1.txt"),
@@ -266,5 +327,90 @@ public class FileParameterValueTest {
         HtmlPage workspaceParentPage = wc.goTo(p.getUrl() + "ws" + "/parent");
         String workspaceParentContent = workspaceParentPage.getWebResponse().getContentAsString();
         assertThat(workspaceParentContent, containsString("child2.txt"));
+    }
+
+    @Test
+    public void fileParameter_canStillUse_doubleDotsInFileName() throws Exception {
+        FreeStyleProject p = j.createFreeStyleProject();
+        p.addProperty(new ParametersDefinitionProperty(Collections.singletonList(
+                new FileParameterDefinition("weird..name.txt", null)
+        )));
+
+        File uploadedFile = tmp.newFile();
+        FileUtils.write(uploadedFile, "test1", StandardCharsets.UTF_8);
+
+        FreeStyleBuild build = j.assertBuildStatusSuccess(p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
+                new FileParameterValue("weird..name.txt", uploadedFile, "uploaded-file.txt")
+        )));
+
+        // files are correctly saved in the build "fileParameters" folder
+        File directChild = new File(build.getRootDir(), "fileParameters/weird..name.txt");
+        assertTrue(directChild.exists());
+
+        // both are correctly copied inside the workspace
+        assertTrue(build.getWorkspace().child("weird..name.txt").exists());
+
+        // and reachable using request
+        JenkinsRule.WebClient wc = j.createWebClient();
+        HtmlPage workspacePage = wc.goTo(p.getUrl() + "ws");
+        String workspaceContent = workspacePage.getWebResponse().getContentAsString();
+        assertThat(workspaceContent, containsString("weird..name.txt"));
+    }
+
+    @Test
+    public void fileParameter_canStillUse_TildeInFileName() throws Exception {
+        FreeStyleProject p = j.createFreeStyleProject();
+        p.addProperty(new ParametersDefinitionProperty(Collections.singletonList(
+                new FileParameterDefinition("~name", null)
+        )));
+
+        File uploadedFile = tmp.newFile();
+        FileUtils.write(uploadedFile, "test1", StandardCharsets.UTF_8);
+
+        FreeStyleBuild build = j.assertBuildStatusSuccess(p.scheduleBuild2(0, new Cause.UserIdCause(), new ParametersAction(
+                new FileParameterValue("~name", uploadedFile, "uploaded-file.txt")
+        )));
+
+        // files are correctly saved in the build "fileParameters" folder
+        File directChild = new File(build.getRootDir(), "fileParameters/~name");
+        assertTrue(directChild.exists());
+
+        // both are correctly copied inside the workspace
+        assertTrue(build.getWorkspace().child("~name").exists());
+
+        // and reachable using request
+        JenkinsRule.WebClient wc = j.createWebClient();
+        HtmlPage workspacePage = wc.goTo(p.getUrl() + "ws");
+        String workspaceContent = workspacePage.getWebResponse().getContentAsString();
+        assertThat(workspaceContent, containsString("~name"));
+    }
+
+    @Issue("SECURITY-1793")
+    @Test
+    @LocalData
+    public void contentSecurityPolicy() throws Exception {
+        FreeStyleProject p = j.jenkins.getItemByFullName("SECURITY-1793", FreeStyleProject.class);
+
+        HtmlPage page = j.createWebClient().goTo("job/" + p.getName() + "/lastSuccessfulBuild/parameters/parameter/html.html/html.html");
+        for (String header : new String[]{"Content-Security-Policy", "X-WebKit-CSP", "X-Content-Security-Policy"}) {
+            assertEquals("Header set: " + header, DirectoryBrowserSupport.DEFAULT_CSP_VALUE, page.getWebResponse().getResponseHeaderValue(header));
+        }
+
+        String propName = DirectoryBrowserSupport.class.getName() + ".CSP";
+        String initialValue = System.getProperty(propName);
+        try {
+            System.setProperty(propName, "");
+            page = j.createWebClient().goTo("job/" + p.getName() + "/lastSuccessfulBuild/parameters/parameter/html.html/html.html");
+            List<String> headers = page.getWebResponse().getResponseHeaders().stream().map(NameValuePair::getName).collect(Collectors.toList());
+            for (String header : new String[]{"Content-Security-Policy", "X-WebKit-CSP", "X-Content-Security-Policy"}) {
+                assertThat(headers, not(hasItem(header)));
+            }
+        } finally {
+            if (initialValue == null) {
+                System.clearProperty(DirectoryBrowserSupport.class.getName() + ".CSP");
+            } else {
+                System.setProperty(DirectoryBrowserSupport.class.getName() + ".CSP", initialValue);
+            }
+        }
     }
 }

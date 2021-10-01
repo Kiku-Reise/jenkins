@@ -23,44 +23,38 @@
  */
 package hudson;
 
+import edu.umd.cs.findbugs.annotations.Nullable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.model.AperiodicWork;
+import hudson.slaves.OfflineCause;
+import hudson.util.VersionNumber;
 import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.SequenceInputStream;
-import java.io.Writer;
-import java.nio.charset.Charset;
+import java.net.BindException;
+import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
+import java.net.Socket;
+import java.net.SocketAddress;
+import java.net.URL;
+import java.nio.channels.ServerSocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.interfaces.RSAPublicKey;
-import javax.annotation.Nullable;
-
-import hudson.model.AperiodicWork;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import jenkins.AgentProtocol;
 import jenkins.model.Jenkins;
 import jenkins.model.identity.InstanceIdentityProvider;
 import jenkins.security.stapler.StaplerAccessibleType;
 import jenkins.slaves.RemotingVersionInfo;
 import jenkins.util.SystemProperties;
-import hudson.slaves.OfflineCause;
-import java.io.DataOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
-import java.net.SocketAddress;
-import java.util.Arrays;
-import jenkins.AgentProtocol;
-
-import java.io.BufferedWriter;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.BindException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.nio.channels.ServerSocketChannel;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.io.Charsets;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.lang.StringUtils;
@@ -69,7 +63,7 @@ import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
- * Listens to incoming TCP connections from JNLP agents and deprecated Remoting-based CLI.
+ * Listens to incoming TCP connections, for example from agents.
  *
  * <p>
  * Aside from the HTTP endpoint, Jenkins runs {@link TcpSlaveAgentListener} that listens on a TCP socket.
@@ -132,6 +126,21 @@ public final class TcpSlaveAgentListener extends Thread {
     }
 
     /**
+     * Gets the host name that we advertise protocol clients to connect to.
+     * @since 2.198
+     */
+    public String getAdvertisedHost() {
+        if (CLI_HOST_NAME != null) {
+          return CLI_HOST_NAME;
+        }
+        try {
+            return new URL(Jenkins.get().getRootUrl()).getHost();
+        } catch (MalformedURLException | NullPointerException e) {
+            throw new IllegalStateException("Could not get TcpSlaveAgentListener host name", e);
+        }
+    }
+
+    /**
      * Gets the Base64 encoded public key that forms part of this instance's identity keypair.
      * @return the Base64 encoded public key
      * @since 2.16
@@ -139,7 +148,7 @@ public final class TcpSlaveAgentListener extends Thread {
     @Nullable
     public String getIdentityPublicKey() {
         RSAPublicKey key = InstanceIdentityProvider.RSA.getPublicKey();
-        return key == null ? null : new String(Base64.encodeBase64(key.getEncoded()), Charset.forName("UTF-8"));
+        return key == null ? null : Base64.getEncoder().encodeToString(key.getEncoded());
     }
 
     /**
@@ -150,7 +159,15 @@ public final class TcpSlaveAgentListener extends Thread {
      * @since 2.16
      */
     public String getAgentProtocolNames() {
-        return StringUtils.join(Jenkins.getInstance().getAgentProtocols(), ", ");
+        return StringUtils.join(Jenkins.get().getAgentProtocols(), ", ");
+    }
+
+    /**
+     * Gets Remoting minimum supported version to prevent unsupported agents from connecting
+     * @since 2.171
+     */
+    public VersionNumber getRemotingMinimumVersion() {
+        return RemotingVersionInfo.getMinimumSupportedVersion();
     }
 
     @Override
@@ -207,13 +224,17 @@ public final class TcpSlaveAgentListener extends Thread {
     }
 
     private final class ConnectionHandler extends Thread {
+        private static final String DEFAULT_RESPONSE_404 = "HTTP/1.0 404 Not Found\r\n" +
+                        "Content-Type: text/plain;charset=UTF-8\r\n" +
+                        "\r\n" +
+                        "Not Found\r\n";
         private final Socket s;
         /**
          * Unique number to identify this connection. Used in the log.
          */
         private final int id;
 
-        public ConnectionHandler(Socket s, ConnectionHandlerFailureCallback parentTerminator) {
+        ConnectionHandler(Socket s, ConnectionHandlerFailureCallback parentTerminator) {
             this.s = s;
             synchronized(getClass()) {
                 id = iotaGen++;
@@ -236,15 +257,12 @@ public final class TcpSlaveAgentListener extends Thread {
                 LOGGER.log(Level.FINE, "Accepted connection #{0} from {1}", new Object[] {id, s.getRemoteSocketAddress()});
 
                 DataInputStream in = new DataInputStream(s.getInputStream());
-                PrintWriter out = new PrintWriter(
-                        new BufferedWriter(new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8)),
-                        true); // DEPRECATED: newer protocol shouldn't use PrintWriter but should use DataOutputStream
 
                 // peek the first few bytes to determine what to do with this client
                 byte[] head = new byte[10];
                 in.readFully(head);
 
-                String header = new String(head, Charsets.US_ASCII);
+                String header = new String(head, StandardCharsets.US_ASCII);
                 if (header.startsWith("GET ")) {
                     // this looks like an HTTP client
                     respondHello(header,s);
@@ -258,16 +276,16 @@ public final class TcpSlaveAgentListener extends Thread {
                     String protocol = s.substring(9);
                     AgentProtocol p = AgentProtocol.of(protocol);
                     if (p!=null) {
-                        if (Jenkins.getInstance().getAgentProtocols().contains(protocol)) {
+                        if (Jenkins.get().getAgentProtocols().contains(protocol)) {
                             LOGGER.log(p instanceof PingAgentProtocol ? Level.FINE : Level.INFO, "Accepted {0} connection #{1} from {2}", new Object[] {protocol, id, this.s.getRemoteSocketAddress()});
                             p.handle(this.s);
                         } else {
-                            error(out, "Disabled protocol:" + s);
+                            error("Disabled protocol:" + s, this.s);
                         }
                     } else
-                        error(out, "Unknown protocol:" + s);
+                        error("Unknown protocol:", this.s);
                 } else {
-                    error(out, "Unrecognized protocol: "+s);
+                    error("Unrecognized protocol: " + s, this.s);
                 }
             } catch (InterruptedException e) {
                 LOGGER.log(Level.WARNING,"Connection #"+id+" aborted",e);
@@ -277,7 +295,11 @@ public final class TcpSlaveAgentListener extends Thread {
                     // try to clean up the socket
                 }
             } catch (IOException e) {
-                LOGGER.log(Level.WARNING,"Connection #"+id+" failed",e);
+                if (e instanceof EOFException) {
+                    LOGGER.log(Level.INFO, "Connection #{0} failed: {1}", new Object[] {id, e});
+                } else {
+                    LOGGER.log(Level.WARNING, "Connection #" + id + " failed", e);
+                }
                 try {
                     s.close();
                 } catch (IOException ex) {
@@ -292,50 +314,49 @@ public final class TcpSlaveAgentListener extends Thread {
          */
         private void respondHello(String header, Socket s) throws IOException {
             try {
-                Writer o = new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8);
-
-                //TODO: expose version about minimum supported Remoting version (JENKINS-48766)
+                DataOutputStream out = new DataOutputStream(s.getOutputStream());
+                String response;
                 if (header.startsWith("GET / ")) {
-                    o.write("HTTP/1.0 200 OK\r\n");
-                    o.write("Content-Type: text/plain;charset=UTF-8\r\n");
-                    o.write("\r\n");
-                    o.write("Jenkins-Agent-Protocols: " + getAgentProtocolNames()+"\r\n");
-                    o.write("Jenkins-Version: " + Jenkins.VERSION + "\r\n");
-                    o.write("Jenkins-Session: " + Jenkins.SESSION_HASH + "\r\n");
-                    o.write("Client: " + s.getInetAddress().getHostAddress() + "\r\n");
-                    o.write("Server: " + s.getLocalAddress().getHostAddress() + "\r\n");
-                    o.write("Remoting-Minimum-Version: " + RemotingVersionInfo.getMinimumSupportedVersion() + "\r\n");
-                    o.flush();
-                    s.shutdownOutput();
+                    response = "HTTP/1.0 200 OK\r\n" +
+                            "Content-Type: text/plain;charset=UTF-8\r\n" +
+                            "\r\n" +
+                            "Jenkins-Agent-Protocols: " + getAgentProtocolNames()+"\r\n" +
+                            "Jenkins-Version: " + Jenkins.VERSION + "\r\n" +
+                            "Jenkins-Session: " + Jenkins.SESSION_HASH + "\r\n" +
+                            "Client: " + s.getInetAddress().getHostAddress() + "\r\n" +
+                            "Server: " + s.getLocalAddress().getHostAddress() + "\r\n" +
+                            "Remoting-Minimum-Version: " + getRemotingMinimumVersion() + "\r\n";
                 } else {
-                    o.write("HTTP/1.0 404 Not Found\r\n");
-                    o.write("Content-Type: text/plain;charset=UTF-8\r\n");
-                    o.write("\r\n");
-                    o.write("Not Found\r\n");
-                    o.flush();
-                    s.shutdownOutput();
+                    response = DEFAULT_RESPONSE_404;
                 }
+                out.write(response.getBytes(StandardCharsets.UTF_8));
+                out.flush();
+                s.shutdownOutput();
 
                 InputStream i = s.getInputStream();
-                IOUtils.copy(i, new NullOutputStream());
+                IOUtils.copy(i, NullOutputStream.NULL_OUTPUT_STREAM);
                 s.shutdownInput();
             } finally {
                 s.close();
             }
         }
 
-        private void error(PrintWriter out, String msg) throws IOException {
-            out.println(msg);
+        private void error(String msg, Socket s) throws IOException {
+            DataOutputStream out = new DataOutputStream(s.getOutputStream());
+            String response = msg + System.lineSeparator();
+            out.write(response.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            s.shutdownOutput();
             LOGGER.log(Level.WARNING, "Connection #{0} is aborted: {1}", new Object[]{id, msg});
             s.close();
         }
     }
 
     // This is essentially just to be able to pass the parent thread into the callback, as it can't access it otherwise
-    private abstract class ConnectionHandlerFailureCallback {
+    private abstract static class ConnectionHandlerFailureCallback {
         private Thread parentThread;
 
-        public ConnectionHandlerFailureCallback(Thread parentThread) {
+        ConnectionHandlerFailureCallback(Thread parentThread) {
             this.parentThread = parentThread;
         }
 
@@ -347,7 +368,7 @@ public final class TcpSlaveAgentListener extends Thread {
     }
 
     /**
-     * This extension provides a Ping protocol that allows people to verify that the TcpSlaveAgentListener is alive.
+     * This extension provides a Ping protocol that allows people to verify that the {@link TcpSlaveAgentListener} is alive.
      * We also use this to wake the acceptor thread on termination.
      *
      * @since 1.653
@@ -362,9 +383,6 @@ public final class TcpSlaveAgentListener extends Thread {
             ping = "Ping\n".getBytes(StandardCharsets.UTF_8);
         }
 
-        /**
-         * {@inheritDoc}
-         */
         @Override
         public boolean isRequired() {
             return true;
@@ -375,9 +393,6 @@ public final class TcpSlaveAgentListener extends Thread {
             return "Ping";
         }
 
-        /**
-         * {@inheritDoc}
-         */
         @Override
         public String getDisplayName() {
             return Messages.TcpSlaveAgentListener_PingAgentProtocol_displayName();
@@ -427,7 +442,7 @@ public final class TcpSlaveAgentListener extends Thread {
     }
 
     /**
-     * Reschedules the <code>TcpSlaveAgentListener</code> on demand.  Disables itself after running.
+     * Reschedules the {@code TcpSlaveAgentListener} on demand.  Disables itself after running.
      */
     @Extension
     @Restricted(NoExternalUse.class)
@@ -476,7 +491,7 @@ public final class TcpSlaveAgentListener extends Thread {
                     if (originThread.isAlive()) {
                         originThread.interrupt();
                     }
-                    int port = Jenkins.getInstance().getSlaveAgentPort();
+                    int port = Jenkins.get().getSlaveAgentPort();
                     if (port != -1) {
                         new TcpSlaveAgentListener(port).start();
                         LOGGER.log(Level.INFO, "Restarted TcpSlaveAgentListener");
@@ -508,6 +523,7 @@ public final class TcpSlaveAgentListener extends Thread {
      * Connection terminated because we are reconnected from the current peer.
      */
     public static class ConnectionFromCurrentPeer extends OfflineCause {
+        @Override
         public String toString() {
             return "The current peer is reconnecting";
         }
@@ -542,37 +558,3 @@ public final class TcpSlaveAgentListener extends Thread {
     @Restricted(NoExternalUse.class)
     public static Integer CLI_PORT = SystemProperties.getInteger(TcpSlaveAgentListener.class.getName()+".port");
 }
-
-/*
-Pasted from http://today.java.net/pub/a/today/2005/09/01/webstart.html
-
-    Is it unrealistic to try to control access to JWS files?
-    Is anyone doing this?
-
-It is not unrealistic, and we are doing it. Create a protected web page
-with a download button or link that makes a servlet call. If the user has
-already logged in to your website, of course they can go there without
-further authentication. The servlet reads the cookies sent by the browser
-when the link is activated. It then generates a dynamic JNLP file adding
-the authentication cookie and any other required cookies (JSESSIONID, etc.)
-via <argument> tags. Write the WebStart application so that it picks up
-any required cookies from the argument list, and adds these cookies to its
-request headers on subsequent calls to the server. (Note: in the dynamic
-JNLP file, do NOT put href= in the opening jnlp tag. If you do, JWS will
-try to reload the JNLP from disk and since it's dynamic, it won't be there.
-Leave it off and JWS will be happy.)
-
-When returning the dynamic JNLP, the servlet should invoke setHeader(
-"Expires", 0 ) and addDateHeader() twice on the servlet response to set
-both "Date" and "Last-Modified" to the current date. This keeps the browser
-from using a cached copy of a prior dynamic JNLP obtained from the same URL.
-
-Note also that the JAR file(s) for the JWS application should not be on
-a password-protected path - the launcher won't know about the authentication
-cookie. But once the application starts, you can run all its requests
-through a protected path requiring the authentication cookie, because
-the application gets it from the dynamic JNLP. Just write it so that it
-can't do anything useful without going through a protected path or doing
-something to present credentials that could only have come from a valid
-user.
-*/

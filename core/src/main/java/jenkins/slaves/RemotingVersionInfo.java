@@ -23,9 +23,8 @@
  */
 package jenkins.slaves;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.util.VersionNumber;
-
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -42,10 +41,10 @@ public class RemotingVersionInfo {
     private static final Logger LOGGER = Logger.getLogger(RemotingVersionInfo.class.getName());
     private static final String RESOURCE_NAME="remoting-info.properties";
 
-    @Nonnull
+    @NonNull
     private static VersionNumber EMBEDDED_VERSION;
 
-    @Nonnull
+    @NonNull
     private static VersionNumber MINIMUM_SUPPORTED_VERSION;
 
     private RemotingVersionInfo() {}
@@ -64,8 +63,8 @@ public class RemotingVersionInfo {
         MINIMUM_SUPPORTED_VERSION = extractVersion(props, "remoting.minimum.supported.version");
     }
 
-    @Nonnull
-    private static VersionNumber extractVersion(@Nonnull Properties props, @Nonnull String propertyName)
+    @NonNull
+    private static VersionNumber extractVersion(@NonNull Properties props, @NonNull String propertyName)
             throws ExceptionInInitializerError {
         String prop = props.getProperty(propertyName);
         if (prop == null) {
@@ -93,7 +92,7 @@ public class RemotingVersionInfo {
      * Note that this version <b>may</b> differ from one which is being really used in Jenkins.
      * @return Remoting version
      */
-    @Nonnull
+    @NonNull
     public static VersionNumber getEmbeddedVersion() {
         return EMBEDDED_VERSION;
     }
@@ -106,7 +105,7 @@ public class RemotingVersionInfo {
      * This method defines a minimum expected version, so that all calls should use a compatible API.
      * @return Minimal Remoting version for API calls.
      */
-    @Nonnull
+    @NonNull
     public static VersionNumber getMinimumSupportedVersion() {
         return MINIMUM_SUPPORTED_VERSION;
     }

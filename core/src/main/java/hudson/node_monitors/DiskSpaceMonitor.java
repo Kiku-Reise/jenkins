@@ -27,13 +27,12 @@ import hudson.Extension;
 import hudson.FilePath;
 import hudson.model.Computer;
 import hudson.model.Node;
-import hudson.remoting.Callable;
-import jenkins.model.Jenkins;
 import hudson.node_monitors.DiskSpaceMonitorDescriptor.DiskSpace;
-import org.kohsuke.stapler.DataBoundConstructor;
-
+import hudson.remoting.Callable;
 import java.io.IOException;
 import java.text.ParseException;
+import jenkins.model.Jenkins;
+import org.kohsuke.stapler.DataBoundConstructor;
 
 /**
  * Checks available disk space of the remote FS root.
@@ -57,10 +56,11 @@ public class DiskSpaceMonitor extends AbstractDiskSpaceMonitor {
     @Override
     public String getColumnCaption() {
         // Hide this column from non-admins
-        return Jenkins.getInstance().hasPermission(Jenkins.ADMINISTER) ? super.getColumnCaption() : null;
+        return Jenkins.get().hasPermission(Jenkins.ADMINISTER) ? super.getColumnCaption() : null;
     }
 
     public static final DiskSpaceMonitorDescriptor DESCRIPTOR = new DiskSpaceMonitorDescriptor() {
+        @Override
         public String getDisplayName() {
             return Messages.DiskSpaceMonitor_DisplayName();
         }

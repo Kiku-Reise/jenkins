@@ -24,13 +24,13 @@
 package hudson.util;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import hudson.util.Iterators.CountingPredicate;
-
 import java.util.Iterator;
 import java.util.List;
-
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 

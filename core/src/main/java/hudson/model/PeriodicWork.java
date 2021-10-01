@@ -23,22 +23,22 @@
  */
 package hudson.model;
 
-import hudson.ExtensionListListener;
-import hudson.init.Initializer;
-import hudson.triggers.SafeTimerTask;
-import hudson.ExtensionPoint;
+import static hudson.init.InitMilestone.JOB_CONFIG_ADAPTED;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.ExtensionList;
-import jenkins.util.Timer;
-
+import hudson.ExtensionListListener;
+import hudson.ExtensionPoint;
+import hudson.init.Initializer;
+import hudson.triggers.SafeTimerTask;
+import hudson.triggers.Trigger;
 import java.util.HashSet;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
-import java.util.Random;
-
-import static hudson.init.InitMilestone.JOB_LOADED;
-import hudson.triggers.Trigger;
+import jenkins.util.Timer;
 
 /**
  * Extension point to perform a periodic task in Hudson (through {@link Timer}.)
@@ -58,6 +58,7 @@ import hudson.triggers.Trigger;
  * @author Kohsuke Kawaguchi
  * @see AsyncPeriodicWork
  */
+@SuppressFBWarnings(value="PREDICTABLE_RANDOM", justification = "The random is just used for an initial delay.")
 public abstract class PeriodicWork extends SafeTimerTask implements ExtensionPoint {
 
     /** @deprecated Use your own logger, or send messages to the logger in {@link AsyncPeriodicWork#execute}. */
@@ -99,7 +100,7 @@ public abstract class PeriodicWork extends SafeTimerTask implements ExtensionPoi
         return ExtensionList.lookup(PeriodicWork.class);
     }
 
-    @Initializer(after= JOB_LOADED)
+    @Initializer(after= JOB_CONFIG_ADAPTED)
     public static void init() {
         // start all PeriodicWorks
         ExtensionList<PeriodicWork> extensionList = all();
@@ -129,9 +130,7 @@ public abstract class PeriodicWork extends SafeTimerTask implements ExtensionPoi
         private final Set<PeriodicWork> registered = new HashSet<>();
 
         PeriodicWorkExtensionListListener(ExtensionList<PeriodicWork> initiallyRegistered) {
-            for (PeriodicWork p : initiallyRegistered) {
-                registered.add(p);
-            }
+            registered.addAll(initiallyRegistered);
         }
 
         @Override

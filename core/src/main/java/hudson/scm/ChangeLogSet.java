@@ -28,15 +28,14 @@ import hudson.Util;
 import hudson.model.AbstractBuild;
 import hudson.model.Run;
 import hudson.model.User;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.export.ExportedBean;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
 
 /**
  * Represents SCM change list.
@@ -73,7 +72,7 @@ public abstract class ChangeLogSet<T extends ChangeLogSet.Entry> implements Iter
 
     @Deprecated
     protected ChangeLogSet(AbstractBuild<?, ?> build) {
-        this((Run) build, browserFromBuild(build));
+        this(build, browserFromBuild(build));
     }
     private static RepositoryBrowser<?> browserFromBuild(AbstractBuild<?,?> build) {
         if (build == null) { // not generally allowed, but sometimes done in unit tests
@@ -107,7 +106,7 @@ public abstract class ChangeLogSet<T extends ChangeLogSet.Entry> implements Iter
     // method for the remote API.
     @Exported
     public final Object[] getItems() {
-        List<T> r = new ArrayList<T>();
+        List<T> r = new ArrayList<>();
         for (T t : this)
             r.add(t);
         return r.toArray();
@@ -137,7 +136,7 @@ public abstract class ChangeLogSet<T extends ChangeLogSet.Entry> implements Iter
     }
 
     @ExportedBean(defaultVisibility=999)
-    public static abstract class Entry {
+    public abstract static class Entry {
         private ChangeLogSet parent;
 
         public ChangeLogSet getParent() {
@@ -253,7 +252,7 @@ public abstract class ChangeLogSet<T extends ChangeLogSet.Entry> implements Iter
                 } catch(Exception e) {
                     LOGGER.info("ChangeLogAnnotator " + a.toString() + " failed to annotate message '" + getMsg() + "'; " + e.getMessage());
                 } catch(Error e) {
-                    LOGGER.severe("ChangeLogAnnotator " + a.toString() + " failed to annotate message '" + getMsg() + "'; " + e.getMessage());
+                    LOGGER.severe("ChangeLogAnnotator " + a + " failed to annotate message '" + getMsg() + "'; " + e.getMessage());
                 }
 
             return markup.toString(false);

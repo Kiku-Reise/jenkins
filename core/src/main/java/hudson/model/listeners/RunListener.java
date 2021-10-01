@@ -23,34 +23,31 @@
  */
 package hudson.model.listeners;
 
-import hudson.ExtensionPoint;
-import hudson.ExtensionListView;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.ExtensionList;
+import hudson.ExtensionListView;
+import hudson.ExtensionPoint;
 import hudson.FilePath;
 import hudson.Functions;
 import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
 import hudson.model.Environment;
-import hudson.model.Job;
 import hudson.model.JobProperty;
 import hudson.model.Run;
 import hudson.model.Run.RunnerAbortedException;
 import hudson.model.TaskListener;
-import jenkins.model.Jenkins;
 import hudson.scm.SCM;
 import hudson.tasks.BuildWrapper;
 import hudson.util.CopyOnWriteList;
-import org.jvnet.tiger_types.Types;
-
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
+import org.jvnet.tiger_types.Types;
 
 /**
  * Receives notifications about builds.
@@ -93,7 +90,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      *      Any exception/error thrown from this method will be swallowed to prevent broken listeners
      *      from breaking all the builds.
      */
-    public void onCompleted(R r, @Nonnull TaskListener listener) {}
+    public void onCompleted(R r, @NonNull TaskListener listener) {}
 
     /**
      * Called after a build is moved to the {@code Run.State.COMPLETED} state.
@@ -204,7 +201,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
     /**
      * Fires the {@link #onCompleted(Run, TaskListener)} event.
      */
-    public static void fireCompleted(Run r, @Nonnull TaskListener listener) {
+    public static void fireCompleted(Run r, @NonNull TaskListener listener) {
         for (RunListener l : all()) {
             if(l.targetType.isInstance(r))
                 try {
@@ -248,7 +245,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      * Fires the {@link #onFinalized(Run)} event.
      */
     public static void fireFinalized(Run r) {
-        if (Jenkins.getInstanceOrNull() == null) { // TODO use !Functions.isExtensionsAvailable() once JENKINS-33377
+        if (!Functions.isExtensionsAvailable()) {
             return;
         }
         for (RunListener l : all()) {

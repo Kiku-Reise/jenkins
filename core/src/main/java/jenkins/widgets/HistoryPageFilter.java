@@ -24,6 +24,7 @@
 package jenkins.widgets;
 
 import com.google.common.collect.Iterables;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.AbstractBuild;
 import hudson.model.Job;
 import hudson.model.ParameterValue;
@@ -33,10 +34,7 @@ import hudson.model.Run;
 import hudson.search.UserSearchProperty;
 import hudson.util.Iterators;
 import hudson.widgets.HistoryWidget;
-
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -103,19 +101,8 @@ public class HistoryPageFilter<T> {
      * Set the search string used to narrow the filtered set of builds.
      * @param searchString The search string.
      */
-    public void setSearchString(@Nonnull String searchString) {
+    public void setSearchString(@NonNull String searchString) {
         this.searchString = searchString;
-    }
-
-    /**
-     * Add build items to the History page.
-     *
-     * @param runItems The items to be added. Assumes the items are in descending queue ID order i.e. newest first.
-     * @deprecated Replaced by add(Iterable&lt;T&gt;) as of version 2.15
-     */
-    @Deprecated
-    public void add(@Nonnull List<T> runItems) {
-        addInternal(runItems);
     }
 
     /**
@@ -124,7 +111,7 @@ public class HistoryPageFilter<T> {
      * @param runItems The items to be added. Assumes the items are in descending queue ID order i.e. newest first.
      * @since 2.17
      */
-    public void add(@Nonnull Iterable<T> runItems) {
+    public void add(@NonNull Iterable<T> runItems) {
         addInternal(runItems);
     }
 
@@ -135,7 +122,7 @@ public class HistoryPageFilter<T> {
      * @param queueItems The queue items to be added. Queue items do not need to be sorted.
      * @since 2.17
      */
-    public void add(@Nonnull Iterable<T> runItems, @Nonnull List<Queue.Item> queueItems) {
+    public void add(@NonNull Iterable<T> runItems, @NonNull List<Queue.Item> queueItems) {
         sort(queueItems);
         addInternal(Iterables.concat(queueItems, runItems));
     }
@@ -145,7 +132,7 @@ public class HistoryPageFilter<T> {
      * @param items The items to be added.
      * @param <ItemT> The type of items should either be T or Queue.Item.
      */
-    private <ItemT> void addInternal(@Nonnull Iterable<ItemT> items) {
+    private <ItemT> void addInternal(@NonNull Iterable<ItemT> items) {
         // Note that items can be a large lazily evaluated collection,
         // so this method is optimized to only iterate through it as much as needed.
 
@@ -210,7 +197,7 @@ public class HistoryPageFilter<T> {
                     }
                 }
             }
-        } else if (olderThan != null) {
+        } else {
             Iterator<ItemT> iter = items.iterator();
             while (iter.hasNext()) {
                 Object item = iter.next();
@@ -231,28 +218,22 @@ public class HistoryPageFilter<T> {
         return queueItems.size() + runs.size();
     }
 
-    private void sort(List<? extends Object> items) {
+    private void sort(List<?> items) {
         // Queue items can start building out of order with how they got added to the queue. Sorting them
         // before adding to the page. They'll still get displayed before the building items coz they end
         // up in a different list in HistoryPageFilter.
-        Collections.sort(items, new Comparator<Object>() {
+        items.sort(new Comparator<Object>() {
             @Override
             public int compare(Object o1, Object o2) {
                 long o1QID = HistoryPageEntry.getEntryId(o1);
                 long o2QID = HistoryPageEntry.getEntryId(o2);
 
-                if (o1QID < o2QID) {
-                    return 1;
-                } else if (o1QID == o2QID) {
-                    return 0;
-                } else {
-                    return -1;
-                }
+                return Long.compare(o2QID, o1QID);
             }
         });
     }
 
-    private long getNextBuildNumber(@Nonnull Object entry) {
+    private long getNextBuildNumber(@NonNull Object entry) {
         if (entry instanceof Queue.Item) {
             Queue.Task task = ((Queue.Item) entry).task;
             if (task instanceof Job) {
@@ -311,7 +292,7 @@ public class HistoryPageFilter<T> {
     }
 
     private boolean isFull() {
-        return (size() >= maxEntries);
+        return size() >= maxEntries;
     }
 
     /**
@@ -320,10 +301,10 @@ public class HistoryPageFilter<T> {
      * @return The number of items required to fill the page.
      */
     private int getFillCount() {
-        return Math.max(0, (maxEntries - size()));
+        return Math.max(0, maxEntries - size());
     }
 
-    private boolean fitsSearchParams(@Nonnull Queue.Item item) {
+    private boolean fitsSearchParams(@NonNull Queue.Item item) {
         if (fitsSearchString(item.getDisplayName())) {
             return true;
         } else if (fitsSearchString(item.getId())) {
@@ -333,7 +314,7 @@ public class HistoryPageFilter<T> {
         return false;
     }
 
-    private boolean fitsSearchParams(@Nonnull Run run) {
+    private boolean fitsSearchParams(@NonNull Run run) {
         if (searchString == null) {
             return true;
         }

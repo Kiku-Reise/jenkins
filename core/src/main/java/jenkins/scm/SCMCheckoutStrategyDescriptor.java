@@ -1,12 +1,11 @@
 package jenkins.scm;
 
-import com.google.common.collect.Lists;
 import hudson.DescriptorExtensionList;
 import hudson.model.AbstractProject;
 import hudson.model.Descriptor;
-import jenkins.model.Jenkins;
-
+import java.util.ArrayList;
 import java.util.List;
+import jenkins.model.Jenkins;
 
 /**
  * {@link Descriptor} for {@link SCMCheckoutStrategy}.
@@ -30,11 +29,11 @@ public abstract class SCMCheckoutStrategyDescriptor extends Descriptor<SCMChecko
      * Returns all the registered {@link SCMCheckoutStrategy}s.
      */
     public static DescriptorExtensionList<SCMCheckoutStrategy,SCMCheckoutStrategyDescriptor> all() {
-        return Jenkins.getInstance().<SCMCheckoutStrategy,SCMCheckoutStrategyDescriptor>getDescriptorList(SCMCheckoutStrategy.class);
+        return Jenkins.get().getDescriptorList(SCMCheckoutStrategy.class);
     }
     
     public static List<SCMCheckoutStrategyDescriptor> _for(AbstractProject p) {
-        List<SCMCheckoutStrategyDescriptor> r = Lists.newArrayList();
+        List<SCMCheckoutStrategyDescriptor> r = new ArrayList<>();
         for (SCMCheckoutStrategyDescriptor d : all()) {
             if (d.isApplicable(p))
                 r.add(d);

@@ -23,10 +23,16 @@
  */
 package jenkins.telemetry.impl;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.PluginWrapper;
-import hudson.model.UsageStatistics;
 import hudson.util.VersionNumber;
+import java.time.LocalDate;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentSkipListSet;
 import jenkins.model.Jenkins;
 import jenkins.telemetry.Telemetry;
 import net.sf.json.JSONObject;
@@ -36,33 +42,25 @@ import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.EvaluationTrace;
 import org.kohsuke.stapler.StaplerRequest;
 
-import javax.annotation.Nonnull;
-import java.time.LocalDate;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentSkipListSet;
-
 /**
  * Telemetry implementation gathering information about Stapler dispatch routes.
  */
 @Extension
 @Restricted(NoExternalUse.class)
 public class StaplerDispatches extends Telemetry {
-    @Nonnull
+    @NonNull
     @Override
     public LocalDate getStart() {
         return LocalDate.of(2018, 10, 10);
     }
 
-    @Nonnull
+    @NonNull
     @Override
     public LocalDate getEnd() {
-        return LocalDate.of(2019, 2, 1);
+        return LocalDate.of(2019, 8, 1);
     }
 
-    @Nonnull
+    @NonNull
     @Override
     public String getDisplayName() {
         return "Stapler request handling";

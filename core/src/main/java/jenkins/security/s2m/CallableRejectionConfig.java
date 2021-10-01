@@ -1,16 +1,15 @@
 package jenkins.security.s2m;
 
-import com.google.common.collect.ImmutableSet;
-import jenkins.model.Jenkins;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
 
 /**
  * Text file that lists whitelisted callables.
@@ -27,12 +26,12 @@ public class CallableRejectionConfig extends ConfigFile<Class,Set<Class>> {
 
     @Override
     protected Set<Class> create() {
-        return new HashSet<Class>();
+        return new HashSet<>();
     }
 
     @Override
     protected Set<Class> readOnly(Set<Class> base) {
-        return ImmutableSet.copyOf(base);
+        return Collections.unmodifiableSet(new HashSet<>(base));
     }
 
     @Override
@@ -41,7 +40,7 @@ public class CallableRejectionConfig extends ConfigFile<Class,Set<Class>> {
             line = line.trim();
             if (whitelist.contains(line))   return null;    // already whitelisted
 
-            return Jenkins.getInstance().pluginManager.uberClassLoader.loadClass(line);
+            return Jenkins.get().pluginManager.uberClassLoader.loadClass(line);
         } catch (ClassNotFoundException e) {
             // no longer present in the system?
             return null;
@@ -66,7 +65,7 @@ public class CallableRejectionConfig extends ConfigFile<Class,Set<Class>> {
      * Return the object that helps the UI rendering by providing the details.
      */
     public List<RejectedCallable> describe() {
-        List<RejectedCallable> l = new ArrayList<RejectedCallable>();
+        List<RejectedCallable> l = new ArrayList<>();
         for (Class c : get()) {
             if (!whitelist.contains(c.getName()))
                 l.add(new RejectedCallable(c));

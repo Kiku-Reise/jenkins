@@ -24,17 +24,14 @@
 package jenkins.security.apitoken;
 
 import com.google.common.annotations.VisibleForTesting;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.BulkChange;
 import hudson.Util;
 import hudson.XmlFile;
 import hudson.model.Saveable;
 import hudson.model.User;
 import hudson.model.listeners.SaveableListener;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,6 +43,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 @Restricted(NoExternalUse.class)
 public class ApiTokenStats implements Saveable {
@@ -108,7 +107,7 @@ public class ApiTokenStats implements Saveable {
     @Deprecated
     // to force even if someone wants to remove the one from the class
     @Restricted(NoExternalUse.class)
-    void setParent(@Nonnull File parent) {
+    void setParent(@NonNull File parent) {
         this.parent = parent;
     }
     
@@ -117,9 +116,9 @@ public class ApiTokenStats implements Saveable {
     }
     
     /**
-     * Will trigger the save if there is some modification
+     * Will trigger the save if there is some modifications
      */
-    public synchronized void removeId(@Nonnull String tokenUuid) {
+    public synchronized void removeId(@NonNull String tokenUuid) {
         if(areStatsDisabled()){
             return;
         }
@@ -131,14 +130,39 @@ public class ApiTokenStats implements Saveable {
     }
     
     /**
+     * Will trigger the save if there is some modifications
+     */
+    public synchronized void removeAll() {
+        int size = tokenStats.size();
+        tokenStats.clear();
+        if (size > 0) {
+            save();
+        }
+    }
+    
+    public synchronized void removeAllExcept(@NonNull String tokenUuid) {
+        int sizeBefore = tokenStats.size();
+        tokenStats.removeIf(s -> !s.tokenUuid.equals(tokenUuid));
+        int sizeAfter = tokenStats.size();
+        if (sizeBefore != sizeAfter) {
+            save();
+        }
+    }
+    
+   /**
      * Will trigger the save
      */
-    public synchronized @Nonnull SingleTokenStats updateUsageForId(@Nonnull String tokenUuid) {
+    public @NonNull SingleTokenStats updateUsageForId(@NonNull String tokenUuid) {
         if(areStatsDisabled()){
             return new SingleTokenStats(tokenUuid);
         }
         
-        SingleTokenStats stats = findById(tokenUuid)
+        return updateUsageForIdIfNeeded(tokenUuid);
+    }
+    
+    
+    private synchronized SingleTokenStats updateUsageForIdIfNeeded(@NonNull String tokenUuid) {
+    	SingleTokenStats stats = findById(tokenUuid)
                 .orElseGet(() -> {
                     SingleTokenStats result = new SingleTokenStats(tokenUuid);
                     tokenStats.add(result);
@@ -151,7 +175,7 @@ public class ApiTokenStats implements Saveable {
         return stats;
     }
     
-    public synchronized @Nonnull SingleTokenStats findTokenStatsById(@Nonnull String tokenUuid) {
+    public synchronized @NonNull SingleTokenStats findTokenStatsById(@NonNull String tokenUuid) {
         if(areStatsDisabled()){
             return new SingleTokenStats(tokenUuid);
         }
@@ -161,7 +185,7 @@ public class ApiTokenStats implements Saveable {
                 .orElse(new SingleTokenStats(tokenUuid));
     }
     
-    private @Nonnull Optional<SingleTokenStats> findById(@Nonnull String tokenUuid) {
+    private @NonNull Optional<SingleTokenStats> findById(@NonNull String tokenUuid) {
         return tokenStats.stream()
                 .filter(s -> s.tokenUuid.equals(tokenUuid))
                 .findFirst();
@@ -223,7 +247,7 @@ public class ApiTokenStats implements Saveable {
     @Deprecated
     // to force even if someone wants to remove the one from the class
     @Restricted(NoExternalUse.class) 
-    public static @Nonnull ApiTokenStats load(@CheckForNull File parent) {
+    public static @NonNull ApiTokenStats load(@CheckForNull File parent) {
         // even if we are not using statistics, we load the existing one in case the configuration
         // is enabled afterwards to avoid erasing data
         
@@ -245,7 +269,7 @@ public class ApiTokenStats implements Saveable {
      * <p>
      * If the folder does not exist yet, a fresh new instance is created.
      */
-    public static @Nonnull ApiTokenStats load(@Nonnull User user) {
+    public static @NonNull ApiTokenStats load(@NonNull User user) {
         // even if we are not using statistics, we load the existing one in case the configuration
         // is enabled afterwards to avoid erasing data
         
@@ -266,7 +290,7 @@ public class ApiTokenStats implements Saveable {
     }
     
     @VisibleForTesting
-    static @CheckForNull ApiTokenStats internalLoad(@Nonnull File userFolder) {
+    static @CheckForNull ApiTokenStats internalLoad(@NonNull File userFolder) {
         ApiTokenStats apiTokenStats = null;
         XmlFile statsFile = getConfigFile(userFolder);
         if (statsFile.exists()) {
@@ -281,7 +305,7 @@ public class ApiTokenStats implements Saveable {
         return apiTokenStats;
     }
     
-    protected static @Nonnull XmlFile getConfigFile(@Nonnull File parent) {
+    protected static @NonNull XmlFile getConfigFile(@NonNull File parent) {
         return new XmlFile(new File(parent, "apiTokenStats.xml"));
     }
     

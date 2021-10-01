@@ -24,26 +24,24 @@
 
 package jenkins.scm;
 
-import com.google.common.collect.ImmutableSet;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.Job;
-import hudson.model.Queue;
 import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.User;
 import hudson.scm.ChangeLogSet;
 import hudson.scm.SCM;
 import hudson.util.AdaptedIterator;
-import org.kohsuke.stapler.export.Exported;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import java.util.AbstractSet;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.kohsuke.stapler.export.Exported;
 
 /**
  * Allows a {@link Run} to provide {@link SCM}-related methods, such as providing changesets and culprits.
@@ -58,7 +56,7 @@ public interface RunWithSCM<JobT extends Job<JobT, RunT>,
      *
      * @return A possibly empty list of {@link ChangeLogSet}s.
      */
-    @Nonnull
+    @NonNull
     List<ChangeLogSet<? extends ChangeLogSet.Entry>> getChangeSets();
 
     /**
@@ -91,16 +89,18 @@ public interface RunWithSCM<JobT extends Job<JobT, RunT>,
      *      can be empty but never null.
      */
     @Exported
-    @Nonnull default Set<User> getCulprits() {
+    @NonNull default Set<User> getCulprits() {
         if (shouldCalculateCulprits()) {
             return calculateCulprits();
         }
 
         return new AbstractSet<User>() {
-            private Set<String> culpritIds = ImmutableSet.copyOf(getCulpritIds());
+            private Set<String> culpritIds = Collections.unmodifiableSet(new HashSet<>(getCulpritIds()));
 
+            @Override
             public Iterator<User> iterator() {
                 return new AdaptedIterator<String,User>(culpritIds.iterator()) {
+                    @Override
                     protected User adapt(String id) {
                         // TODO: Probably it should not auto-create users
                         return User.getById(id, true);
@@ -108,6 +108,7 @@ public interface RunWithSCM<JobT extends Job<JobT, RunT>,
                 };
             }
 
+            @Override
             public int size() {
                 return culpritIds.size();
             }
@@ -121,7 +122,7 @@ public interface RunWithSCM<JobT extends Job<JobT, RunT>,
      * @return a non-null {@link Set} of {@link User}s associated with this item.
      */
     @SuppressWarnings("unchecked")
-    @Nonnull
+    @NonNull
     default Set<User> calculateCulprits() {
         Set<User> r = new HashSet<>();
         RunT p = ((RunT)this).getPreviousCompletedBuild();

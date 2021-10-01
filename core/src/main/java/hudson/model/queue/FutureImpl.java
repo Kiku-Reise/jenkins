@@ -23,18 +23,17 @@
  */
 package hudson.model.queue;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.Executor;
-import jenkins.model.Jenkins;
 import hudson.model.Queue;
 import hudson.model.Queue.Executable;
 import hudson.model.Queue.Task;
 import hudson.remoting.AsyncFutureImpl;
-
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import javax.annotation.Nonnull;
+import jenkins.model.Jenkins;
 
 /**
  * Created when {@link hudson.model.Queue.Item} is created so that the caller can track the progress of the task.
@@ -47,40 +46,40 @@ public final class FutureImpl extends AsyncFutureImpl<Executable> implements Que
     /**
      * If the computation has started, set to {@link Executor}s that are running the build.
      */
-    private final Set<Executor> executors = new HashSet<Executor>();
+    private final Set<Executor> executors = new HashSet<>();
 
     /**
      * {@link Future} that completes when the task started running.
      *
      * In contrast, {@link FutureImpl} will complete when the task finishes.
      */
-    /*package*/ final AsyncFutureImpl<Executable> start = new AsyncFutureImpl<Executable>();
+    /*package*/ final AsyncFutureImpl<Executable> start = new AsyncFutureImpl<>();
 
     public FutureImpl(Task task) {
         this.task = task;
     }
 
+    @Override
     public Future<Executable> getStartCondition() {
         return start;
     }
 
-    public final Executable waitForStart() throws InterruptedException, ExecutionException {
+    @Override
+    public Executable waitForStart() throws InterruptedException, ExecutionException {
         return getStartCondition().get();
     }
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
-        Queue q = Jenkins.getInstance().getQueue();
-        synchronized (q) {
-            synchronized (this) {
-                if(!executors.isEmpty()) {
-                    if(mayInterruptIfRunning)
-                        for (Executor e : executors)
-                            e.interrupt();
-                    return mayInterruptIfRunning;
-                }
-                return q.cancel(task);
+        Queue q = Jenkins.get().getQueue();
+        synchronized (this) {
+            if(!executors.isEmpty()) {
+                if(mayInterruptIfRunning)
+                    for (Executor e : executors)
+                        e.interrupt();
+                return mayInterruptIfRunning;
             }
+            return q.cancel(task);
         }
     }
 
@@ -92,7 +91,7 @@ public final class FutureImpl extends AsyncFutureImpl<Executable> implements Que
         }
     }
 
-    synchronized void addExecutor(@Nonnull Executor executor) {
+    synchronized void addExecutor(@NonNull Executor executor) {
         this.executors.add(executor);
     }
 }

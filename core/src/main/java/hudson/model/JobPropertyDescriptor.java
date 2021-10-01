@@ -23,18 +23,16 @@
  */
 package hudson.model;
 
-import jenkins.model.Jenkins;
-import org.kohsuke.stapler.StaplerRequest;
-import org.jvnet.tiger_types.Types;
-
-import java.util.List;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.lang.reflect.Type;
-import java.lang.reflect.ParameterizedType;
+import java.util.List;
+import jenkins.model.Jenkins;
 import jenkins.model.OptionalJobProperty;
-
 import net.sf.json.JSONObject;
+import org.jvnet.tiger_types.Types;
+import org.kohsuke.stapler.StaplerRequest;
 
 /**
  * {@link Descriptor} for {@link JobProperty}.
@@ -58,8 +56,6 @@ public abstract class JobPropertyDescriptor extends Descriptor<JobProperty<?>> {
     }
 
     /**
-     * {@inheritDoc}
-     *
      * @return
      *      null to avoid setting an instance of {@link JobProperty} to the target project (or just use {@link OptionalJobProperty})
      */
@@ -99,7 +95,7 @@ public abstract class JobPropertyDescriptor extends Descriptor<JobProperty<?>> {
      * Gets the {@link JobPropertyDescriptor}s applicable for a given job type.
      */
     public static List<JobPropertyDescriptor> getPropertyDescriptors(Class<? extends Job> clazz) {
-        List<JobPropertyDescriptor> r = new ArrayList<JobPropertyDescriptor>();
+        List<JobPropertyDescriptor> r = new ArrayList<>();
         for (JobPropertyDescriptor p : all())
             if(p.isApplicable(clazz))
                 r.add(p);
@@ -107,6 +103,6 @@ public abstract class JobPropertyDescriptor extends Descriptor<JobProperty<?>> {
     }
 
     public static Collection<JobPropertyDescriptor> all() {
-        return (Collection) Jenkins.getInstance().getDescriptorList(JobProperty.class);
+        return (Collection) Jenkins.get().getDescriptorList(JobProperty.class);
     }
 }

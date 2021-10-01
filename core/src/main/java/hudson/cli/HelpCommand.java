@@ -25,13 +25,11 @@ package hudson.cli;
 
 import hudson.AbortException;
 import hudson.Extension;
-import jenkins.model.Jenkins;
-
 import java.util.Map;
 import java.util.TreeMap;
-
-import org.acegisecurity.AccessDeniedException;
+import jenkins.model.Jenkins;
 import org.kohsuke.args4j.Argument;
+import org.springframework.security.access.AccessDeniedException;
 
 /**
  * Show the list of all commands.
@@ -51,7 +49,7 @@ public class HelpCommand extends CLICommand {
 
     @Override
     protected int run() throws Exception {
-        if (!Jenkins.getActiveInstance().hasPermission(Jenkins.READ)) {
+        if (!Jenkins.get().hasPermission(Jenkins.READ)) {
             throw new AccessDeniedException("You must authenticate to access this Jenkins.\n"
                     + CLI.usage());
         }

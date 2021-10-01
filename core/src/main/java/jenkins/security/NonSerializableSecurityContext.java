@@ -14,12 +14,14 @@
  */
 package jenkins.security;
 
-import org.acegisecurity.context.SecurityContext;
-import org.acegisecurity.context.SecurityContextImpl;
-import org.acegisecurity.Authentication;
-import org.acegisecurity.userdetails.UserDetails;
-
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.servlet.http.HttpSession;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextImpl;
+import org.springframework.security.core.userdetails.UserDetails;
 
 /**
  * The same as {@link SecurityContextImpl} but doesn't serialize {@link Authentication}.
@@ -40,6 +42,8 @@ import javax.servlet.http.HttpSession;
  * @see hudson.security.HttpSessionContextIntegrationFilter2
  * @since 1.509
  */
+@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "It is not intended to be serialized. Default values will be used in case of deserialization")
+@Restricted(NoExternalUse.class)
 public class NonSerializableSecurityContext implements SecurityContext {
     private transient Authentication authentication;
 
@@ -55,11 +59,11 @@ public class NonSerializableSecurityContext implements SecurityContext {
         if (obj instanceof SecurityContext) {
             SecurityContext test = (SecurityContext) obj;
 
-            if ((this.getAuthentication() == null) && (test.getAuthentication() == null)) {
+            if (this.getAuthentication() == null && test.getAuthentication() == null) {
                 return true;
             }
 
-            if ((this.getAuthentication() != null) && (test.getAuthentication() != null)
+            if (this.getAuthentication() != null && test.getAuthentication() != null
                 && this.getAuthentication().equals(test.getAuthentication())) {
                 return true;
             }
@@ -68,6 +72,7 @@ public class NonSerializableSecurityContext implements SecurityContext {
         return false;
     }
 
+    @Override
     public Authentication getAuthentication() {
         return authentication;
     }
@@ -81,6 +86,7 @@ public class NonSerializableSecurityContext implements SecurityContext {
         }
     }
 
+    @Override
     public void setAuthentication(Authentication authentication) {
         this.authentication = authentication;
     }

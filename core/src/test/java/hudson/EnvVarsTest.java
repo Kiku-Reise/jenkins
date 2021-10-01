@@ -23,18 +23,19 @@
  */
 package hudson;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import hudson.EnvVars.OverrideOrderCalculator;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-
-import com.google.common.collect.Sets;
-import org.junit.Test;
+import java.util.TreeMap;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -120,7 +121,7 @@ public class EnvVarsTest {
 
         OverrideOrderCalculator calc = new OverrideOrderCalculator(env, overrides);
         List<String> order = calc.getOrderedVariableNames();
-        assertEquals(Arrays.asList("PATH"), order);
+        assertEquals(Collections.singletonList("PATH"), order);
     }
 
     @Test
@@ -138,6 +139,27 @@ public class EnvVarsTest {
         OverrideOrderCalculator calc = new OverrideOrderCalculator(env, overrides);
         List<String> order = calc.getOrderedVariableNames();
         assertEquals(Arrays.asList("B", "A", "C"), order.subList(0, 3));
-        assertEquals(Sets.newHashSet("E", "D"), new HashSet<String>(order.subList(3, order.size())));
+        assertThat(new HashSet<>(order.subList(3, order.size())), containsInAnyOrder("E", "D"));
+    }
+
+    @Test
+    public void putIfNotNull() {
+        EnvVars env = new EnvVars();
+        env.putIfNotNull("foo", null);
+        assertTrue(env.isEmpty());
+        env.putIfNotNull("foo", "bar");
+        assertFalse(env.isEmpty());
+    }
+
+    @Test
+    public void putAllNonNull() {
+        EnvVars env = new EnvVars();
+        TreeMap<String, String> map = new TreeMap<>();
+        map.put("A", "a");
+        map.put("B", null);
+        TreeMap<String, String> filteredMap = new TreeMap<>();
+        filteredMap.put("A", "a");
+        env.putAllNonNull(map);
+        assertEquals(filteredMap, env);
     }
 }

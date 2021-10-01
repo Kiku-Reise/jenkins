@@ -25,11 +25,9 @@ package hudson.util;
 
 import hudson.Util;
 import hudson.model.Node;
-
 import java.io.IOException;
-
-import org.kohsuke.stapler.export.ExportedBean;
 import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
 
 /**
  * Represents a clock difference. Immutable.
@@ -95,9 +93,7 @@ public final class ClockDifference {
         try {
             if(d==null) return FAILED_HTML;
             return d.getClockDifference().toHtml();
-        } catch (IOException e) {
-            return FAILED_HTML;
-        } catch (InterruptedException e) {
+        } catch (IOException | InterruptedException e) {
             return FAILED_HTML;
         }
     }

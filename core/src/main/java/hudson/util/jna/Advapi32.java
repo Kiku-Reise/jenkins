@@ -15,21 +15,23 @@ Lesser General Public License for more details.
  */
 package hudson.util.jna;
 
-import com.sun.jna.Structure;
 import com.sun.jna.Native;
-import com.sun.jna.WString;
 import com.sun.jna.Pointer;
-import com.sun.jna.win32.StdCallLibrary;
-import com.sun.jna.ptr.PointerByReference;
+import com.sun.jna.Structure;
+import com.sun.jna.WString;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.PointerByReference;
+import com.sun.jna.win32.StdCallLibrary;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
  *
  * @author TB
  */
+@SuppressWarnings("UnusedReturnValue")
 public interface Advapi32  extends StdCallLibrary {
   Advapi32 INSTANCE = (Advapi32) Native.loadLibrary("Advapi32", Advapi32.class, Options.UNICODE_OPTIONS);
 
@@ -351,7 +353,7 @@ typedef struct _SERVICE_TABLE_ENTRY {
 
     @Override
     protected List getFieldOrder() {
-        return Arrays.asList(new String[] {"lpServiceName", "lpServiceProc"});
+        return Arrays.asList("lpServiceName", "lpServiceProc");
     }
   }
 
@@ -359,7 +361,7 @@ typedef struct _SERVICE_TABLE_ENTRY {
 
     @Override
     protected List getFieldOrder() {
-        return Arrays.asList(new String[] {});
+        return Collections.emptyList();
     }
   }
 

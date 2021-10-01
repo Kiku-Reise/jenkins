@@ -23,15 +23,14 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.EnvVars;
 import hudson.Util;
 import hudson.model.Queue.Task;
-import hudson.tasks.Builder;
 import hudson.tasks.BuildWrapper;
+import hudson.tasks.Builder;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.ProtectedExternally;
-
-import javax.annotation.Nonnull;
 
 /**
  * {@link Action} that contributes environment variables during a build.
@@ -58,7 +57,7 @@ public interface EnvironmentContributingAction extends Action {
      *      Environment variables should be added to this map.
      * @since 2.76
      */
-    default void buildEnvironment(@Nonnull Run<?, ?> run, @Nonnull EnvVars env) {
+    default void buildEnvironment(@NonNull Run<?, ?> run, @NonNull EnvVars env) {
         if (run instanceof AbstractBuild
                 && Util.isOverridden(EnvironmentContributingAction.class,
                                      getClass(), "buildEnvVars", AbstractBuild.class, EnvVars.class)) {

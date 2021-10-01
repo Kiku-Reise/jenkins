@@ -27,7 +27,6 @@ package hudson.util;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Launcher.ProcStarter;
-
 import java.io.File;
 import java.io.Serializable;
 import java.util.Map;
@@ -41,7 +40,7 @@ import java.util.TreeMap;
  */
 public class JVMBuilder implements Serializable {
     private final ClasspathBuilder classpath = new ClasspathBuilder();
-    private final Map<String,String> systemProperties = new TreeMap<String,String>();
+    private final Map<String,String> systemProperties = new TreeMap<>();
     private final ArgumentListBuilder args = new ArgumentListBuilder();
     private final ArgumentListBuilder vmopts = new ArgumentListBuilder();
     private FilePath pwd;

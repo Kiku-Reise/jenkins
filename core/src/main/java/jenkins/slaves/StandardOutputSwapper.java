@@ -2,22 +2,23 @@ package jenkins.slaves;
 
 import hudson.Extension;
 import hudson.FilePath;
-import jenkins.util.SystemProperties;
 import hudson.model.Computer;
 import hudson.model.TaskListener;
 import hudson.remoting.Channel;
 import hudson.remoting.StandardOutputStream;
 import hudson.slaves.ComputerListener;
 import hudson.util.jna.GNUCLibrary;
-import jenkins.security.MasterToSlaveCallable;
-
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.security.MasterToSlaveCallable;
+import jenkins.util.SystemProperties;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -31,31 +32,40 @@ public class StandardOutputSwapper extends ComputerListener {
         try {
             if (channel.call(new ChannelSwapper()))
                 listener.getLogger().println("Evacuated stdout");
-        } catch (Throwable e) {
-            LOGGER.fine("Fatal problem swapping file descriptors " + c.getName());
+        } catch (Exception x) {
+            LOGGER.log(Level.FINE, "Fatal problem swapping file descriptors " + c.getName(), x);
         }
     }
 
     private static final class ChannelSwapper extends MasterToSlaveCallable<Boolean,Exception> {
+        @Override
         public Boolean call() throws Exception {
             if (File.pathSeparatorChar==';')    return false;   // Windows
             Channel c = getOpenChannelOrFail();
             StandardOutputStream sos = (StandardOutputStream) c.getProperty(StandardOutputStream.class);
             if (sos!=null) {
-                swap(sos);
+                _swap(sos);
                 return true;
             }
 
             OutputStream o = c.getUnderlyingOutput();
             if (o instanceof StandardOutputStream) {
-                swap((StandardOutputStream) o);
+                _swap((StandardOutputStream) o);
                 return true;
             }
 
             return false;
         }
 
-        private void swap(StandardOutputStream stdout) throws IOException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
+        private void _swap(StandardOutputStream stdout) throws Exception {
+            try {
+                swap(stdout);
+            } catch (LinkageError x) {
+                throw new Exception(x);
+            }
+        }
+
+        private void swap(StandardOutputStream stdout) throws IOException, NoSuchMethodException, InstantiationException, IllegalAccessException, InvocationTargetException, UnsatisfiedLinkError {
             // duplicate the OS file descriptor and create FileOutputStream around it
             int out = GNUCLibrary.LIBC.dup(1);
             if (out<0)      throw new IOException("Failed to dup(1)");

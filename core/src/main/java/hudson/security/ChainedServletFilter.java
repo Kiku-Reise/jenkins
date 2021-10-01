@@ -28,13 +28,15 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+import java.util.regex.Pattern;
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * Servlet {@link Filter} that chains multiple {@link Filter}s.
@@ -58,9 +60,10 @@ public class ChainedServletFilter implements Filter {
     }
 
     public void setFilters(Collection<? extends Filter> filters) {
-        this.filters = filters.toArray(new Filter[filters.size()]);
+        this.filters = filters.toArray(new Filter[0]);
     }
 
+    @Override
     public void init(FilterConfig filterConfig) throws ServletException {
         if (LOGGER.isLoggable(Level.FINEST))
             for (Filter f : filters)
@@ -70,26 +73,44 @@ public class ChainedServletFilter implements Filter {
             f.init(filterConfig);
     }
 
+    private static final Pattern UNINTERESTING_URIS = Pattern.compile("/(images|jsbundles|css|scripts|adjuncts)/|/favicon[.]ico|/ajax");
+    @Override
     public void doFilter(ServletRequest request, ServletResponse response, final FilterChain chain) throws IOException, ServletException {
-        LOGGER.entering(ChainedServletFilter.class.getName(), "doFilter");
+        String uri = request instanceof HttpServletRequest ? ((HttpServletRequest) request).getRequestURI() : "?";
+        Level level = UNINTERESTING_URIS.matcher(uri).find() ? Level.FINER : Level.FINE;
+        LOGGER.log(level, () -> "starting filter on " + uri);
 
         new FilterChain() {
             private int position=0;
             // capture the array for thread-safety
             private final Filter[] filters = ChainedServletFilter.this.filters;
 
+            @Override
             public void doFilter(ServletRequest request, ServletResponse response) throws IOException, ServletException {
                 if(position==filters.length) {
-                    // reached to the end
+                    LOGGER.log(level, () -> uri + " end: " + status());
                     chain.doFilter(request,response);
                 } else {
-                    // call next
-                    filters[position++].doFilter(request,response,this);
+                    Filter next = filters[position++];
+                    try {
+                        LOGGER.log(level, () -> uri + " @" + position + " " + next + " »");
+                        next.doFilter(request,response,this);
+                        LOGGER.log(level, () -> uri + " @" + position + " " + next + " « success: " + status());
+                    } catch (IOException | ServletException | RuntimeException x) {
+                        LOGGER.log(level, () -> uri + " @" + position + " " + next + " « " + x + ": " + status());
+                        throw x;
+                    }
                 }
             }
+
+            private int status() {
+                return response instanceof HttpServletResponse ? ((HttpServletResponse) response).getStatus() : 0;
+            }
         }.doFilter(request,response);
+
     }
 
+    @Override
     public void destroy() {
         for (Filter f : filters)
             f.destroy();

@@ -24,32 +24,24 @@
 
 package hudson.cli;
 
-import hudson.Extension;
-import hudson.Functions;
-import hudson.model.AbstractBuild;
-import hudson.model.FreeStyleProject;
-import hudson.model.Job;
-import hudson.model.labels.LabelAtom;
-import hudson.tasks.BatchFile;
-import hudson.tasks.Shell;
-import jenkins.model.Jenkins;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.jvnet.hudson.test.JenkinsRule;
-
-import java.io.IOException;
-import java.util.List;
-
 import static hudson.cli.CLICommandInvoker.Matcher.failedWith;
 import static hudson.cli.CLICommandInvoker.Matcher.hasNoStandardOutput;
 import static hudson.cli.CLICommandInvoker.Matcher.succeeded;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
+
+import hudson.Functions;
+import hudson.model.FreeStyleProject;
+import hudson.model.Item;
+import hudson.model.labels.LabelAtom;
+import hudson.tasks.BatchFile;
+import hudson.tasks.Shell;
+import jenkins.model.Jenkins;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.jvnet.hudson.test.JenkinsRule;
 
 /**
  * @author pjanouse
@@ -69,7 +61,7 @@ public class RunRangeCommand2Test {
         assertThat(((FreeStyleProject) j.jenkins.getItem("aProject")).getBuilds().size(), equalTo(1));
 
         CLICommandInvoker.Result result = command
-                .authorizedTo(Jenkins.READ, Job.READ)
+                .authorizedTo(Jenkins.READ, Item.READ)
                 .invokeWithArgs("", "1");
         assertThat(result, failedWith(3));
         assertThat(result, hasNoStandardOutput());
@@ -81,7 +73,7 @@ public class RunRangeCommand2Test {
         assertThat(((FreeStyleProject) j.jenkins.getItem("aProject")).getBuilds().size(), equalTo(1));
 
         CLICommandInvoker.Result result = command
-                .authorizedTo(Jenkins.READ, Job.READ)
+                .authorizedTo(Jenkins.READ, Item.READ)
                 .invokeWithArgs(" ", "1");
         assertThat(result, failedWith(3));
         assertThat(result, hasNoStandardOutput());
@@ -105,7 +97,7 @@ public class RunRangeCommand2Test {
         }
 
         final CLICommandInvoker.Result result = command
-                .authorizedTo(Jenkins.READ, Job.READ)
+                .authorizedTo(Jenkins.READ, Item.READ)
                 .invokeWithArgs("aProject", "1");
         assertThat(result, succeeded());
         assertThat(result.stdout(), containsString("Builds: 1" + System.lineSeparator()));
@@ -123,7 +115,7 @@ public class RunRangeCommand2Test {
                 project.isBuilding(), equalTo(false));
 
         final CLICommandInvoker.Result result = command
-                .authorizedTo(Jenkins.READ, Job.READ)
+                .authorizedTo(Jenkins.READ, Item.READ)
                 .invokeWithArgs("aProject", "1");
         assertThat(result, succeeded());
         assertThat(result.stdout(), containsString("Builds: " + System.lineSeparator()));

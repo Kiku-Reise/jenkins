@@ -24,9 +24,11 @@
 
 package jenkins.management;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.model.ManagementLink;
-import jenkins.management.Messages;
+import hudson.security.Permission;
+import jenkins.model.Jenkins;
 import org.jenkinsci.Symbol;
 
 /**
@@ -40,6 +42,7 @@ public class NodesLink extends ManagementLink {
         return "network.png";
     }
 
+    @Override
     public String getDisplayName() {
         return Messages.NodesLink_DisplayName();
     }
@@ -49,8 +52,20 @@ public class NodesLink extends ManagementLink {
         return Messages.NodesLink_Description();
     }
 
+    @NonNull
+    @Override
+    public Permission getRequiredPermission() {
+        return Jenkins.READ;
+    }
+
     @Override
     public String getUrlName() {
         return "computer";
+    }
+
+    @NonNull
+    @Override
+    public Category getCategory() {
+        return Category.CONFIGURATION;
     }
 }

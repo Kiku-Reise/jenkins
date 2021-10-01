@@ -1,12 +1,11 @@
 package jenkins.bugs;
 
+import hudson.security.HudsonPrivateSecurityRealm;
+import jenkins.model.Jenkins;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
-
-import hudson.security.HudsonPrivateSecurityRealm;
-import jenkins.model.Jenkins;
 
 public class Jenkins41511Test {
 
@@ -21,7 +20,7 @@ public class Jenkins41511Test {
 
     @Test
     public void configRoundTrip() throws Exception {
-        Jenkins.getInstance().setSecurityRealm(new HudsonPrivateSecurityRealm(true, false, null));
+        Jenkins.get().setSecurityRealm(new HudsonPrivateSecurityRealm(true, false, null));
         j.submit(j.createWebClient().goTo("configureSecurity").getFormByName("config"));
     }
 }

@@ -1,20 +1,20 @@
 package hudson.util;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.WebAppMain;
-import jenkins.util.groovy.GroovyHookScript;
-import org.kohsuke.stapler.WebApp;
-
-import javax.annotation.CheckForNull;
-import javax.servlet.ServletContext;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.servlet.ServletContext;
+import jenkins.util.groovy.GroovyHookScript;
+import org.kohsuke.stapler.WebApp;
 
 /**
  * Indicates a fatal boot problem, among {@link ErrorObject}
@@ -55,16 +55,17 @@ public abstract class BootFailure extends ErrorObject {
      * Parses the boot attempt file carefully so as not to cause the entire hook script to fail to execute.
      */
     protected List<Date> loadAttempts(File home) {
-        List<Date> dates = new ArrayList<Date>();
+        List<Date> dates = new ArrayList<>();
         if (home!=null) {
             File f = getBootFailureFile(home);
             try {
                 if (f.exists()) {
                     try (BufferedReader failureFileReader = new BufferedReader(new FileReader(f))) {
                         String line;
+                        DateFormat df = DateFormat.getDateInstance();
                         while ((line=failureFileReader.readLine())!=null) {
                             try {
-                                dates.add(new Date(line));
+                                dates.add(df.parse(line));
                             } catch (Exception e) {
                                 // ignore any parse error
                             }

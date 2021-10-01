@@ -23,22 +23,21 @@
  */
 package hudson.diagnosis;
 
-import java.util.concurrent.TimeUnit;
-import hudson.util.ColorPalette;
 import hudson.Extension;
-import hudson.model.PeriodicWork;
 import hudson.model.MultiStageTimeSeries;
-import hudson.model.MultiStageTimeSeries.TrendChart;
 import hudson.model.MultiStageTimeSeries.TimeScale;
-
+import hudson.model.MultiStageTimeSeries.TrendChart;
+import hudson.model.PeriodicWork;
+import hudson.util.ColorPalette;
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
-import java.lang.management.ManagementFactory;
-import java.util.List;
 import java.util.ArrayList;
-import java.io.IOException;
-
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import jenkins.model.Jenkins;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.QueryParameter;
 
@@ -53,7 +52,7 @@ public final class MemoryUsageMonitor extends PeriodicWork {
      * A memory group is conceptually a set of memory pools. 
      */
     public final class MemoryGroup {
-        private final List<MemoryPoolMXBean> pools = new ArrayList<MemoryPoolMXBean>();
+        private final List<MemoryPoolMXBean> pools = new ArrayList<>();
 
         /**
          * Trend of the memory usage, after GCs.
@@ -75,33 +74,26 @@ public final class MemoryUsageMonitor extends PeriodicWork {
         private void update() {
             long used = 0;
             long max = 0;
-//            long cur = 0;
             for (MemoryPoolMXBean pool : pools) {
                 MemoryUsage usage = pool.getCollectionUsage();
                 if(usage==null) continue;   // not available
                 used += usage.getUsed();
                 max  += usage.getMax();
-
-//                usage = pool.getUsage();
-//                if(usage==null) continue;   // not available
-//                cur += usage.getUsed();
             }
 
             // B -> KB
             used /= 1024;
             max /= 1024;
-//            cur /= 1024;
 
             this.used.update(used);
             this.max.update(max);
-//
-//            return String.format("%d/%d/%d (%d%%)",used,cur,max,used*100/max);
         }
 
         /**
          * Generates the memory usage statistics graph.
          */
         public TrendChart doGraph(@QueryParameter String type) throws IOException {
+            Jenkins.get().checkAnyPermission(Jenkins.SYSTEM_READ, Jenkins.MANAGE);
             return MultiStageTimeSeries.createTrendChart(TimeScale.parse(type),used,max);
         }
     }
@@ -115,10 +107,12 @@ public final class MemoryUsageMonitor extends PeriodicWork {
         nonHeap = new MemoryGroup(pools, MemoryType.NON_HEAP);
     }
 
+    @Override
     public long getRecurrencePeriod() {
         return TimeUnit.SECONDS.toMillis(10);
     }
 
+    @Override
     protected void doRun() {
         heap.update();
         nonHeap.update();

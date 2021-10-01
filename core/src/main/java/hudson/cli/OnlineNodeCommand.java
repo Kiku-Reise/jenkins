@@ -27,14 +27,9 @@ package hudson.cli;
 import hudson.AbortException;
 import hudson.Extension;
 import hudson.model.Computer;
-import hudson.model.ComputerSet;
-import hudson.util.EditDistance;
-import jenkins.model.Jenkins;
-
-import org.kohsuke.args4j.Argument;
-
 import java.util.HashSet;
 import java.util.List;
+import org.kohsuke.args4j.Argument;
 
 /**
  * CLI Command, which moves the node to the online state.
@@ -44,7 +39,7 @@ import java.util.List;
 @Extension
 public class OnlineNodeCommand extends CLICommand {
 
-    @Argument(metaVar = "NAME", usage = "Agent name, or empty string for master", required = true, multiValued = true)
+    @Argument(metaVar = "NAME", usage = "Agent name, or empty string for built-in node", required = true, multiValued = true)
     private List<String> nodes;
 
     @Override
@@ -55,24 +50,11 @@ public class OnlineNodeCommand extends CLICommand {
     @Override
     protected int run() throws Exception {
         boolean errorOccurred = false;
-        final Jenkins jenkins = Jenkins.getActiveInstance();
         final HashSet<String> hs = new HashSet<>(nodes);
-        List<String> names = null;
 
         for (String node_s : hs) {
-            Computer computer = null;
-
             try {
-                computer = jenkins.getComputer(node_s);
-                if (computer == null) {
-                    if (names == null) {
-                        names = ComputerSet.getComputerNames();
-                    }
-                    String adv = EditDistance.findNearest(node_s, names);
-                    throw new IllegalArgumentException(adv == null ?
-                            hudson.model.Messages.Computer_NoSuchSlaveExistsWithoutAdvice(node_s) :
-                            hudson.model.Messages.Computer_NoSuchSlaveExists(node_s, adv));
-                }
+                Computer computer = Computer.resolveForCLI(node_s);
                 computer.cliOnline();
             } catch (Exception e) {
                 if (hs.size() == 1) {

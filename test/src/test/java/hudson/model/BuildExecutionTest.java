@@ -24,15 +24,16 @@
 
 package hudson.model;
 
+import static org.junit.Assert.assertEquals;
+
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.slaves.WorkspaceList;
 import hudson.tasks.BuildStepMonitor;
 import hudson.tasks.Notifier;
 import java.io.IOException;
-import org.junit.Test;
-import static org.junit.Assert.*;
 import org.junit.Rule;
+import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
 
@@ -47,15 +48,11 @@ public class BuildExecutionTest {
         FreeStyleBuild b = r.assertBuildStatus(Result.FAILURE, p.scheduleBuild2(0).get());
         r.assertLogContains(Messages.Build_post_build_steps_failed(), b);
         FilePath ws = r.jenkins.getWorkspaceFor(p);
-        WorkspaceList.Lease lease = r.jenkins.toComputer().getWorkspaceList().allocate(ws);
-        try {
+        try (WorkspaceList.Lease lease = r.jenkins.toComputer().getWorkspaceList().allocate(ws)) {
             assertEquals(ws, lease.path);
-        } finally {
-            lease.close();
         }
     }
-
-    @SuppressWarnings("unchecked") // not my fault
+    
     private static class BrokenPublisher extends Notifier {
         @Override public boolean needsToRunAfterFinalized() {
             throw new IllegalStateException("oops");

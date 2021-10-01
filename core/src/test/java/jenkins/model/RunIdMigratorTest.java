@@ -24,6 +24,12 @@
 
 package jenkins.model;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeFalse;
+
 import hudson.Functions;
 import hudson.Util;
 import hudson.util.StreamTaskListener;
@@ -37,22 +43,27 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import org.apache.commons.io.FileUtils;
-import org.junit.Test;
-import static org.junit.Assert.*;
-import static org.junit.Assume.assumeFalse;
-
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 public class RunIdMigratorTest {
 
     @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
+    private static TimeZone defaultTimezone;
+
     /** Ensures that legacy timestamps are interpreted in a predictable time zone. */
     @BeforeClass public static void timezone() {
-        TimeZone.setDefault(TimeZone.getTimeZone("EST"));
+        defaultTimezone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+    }
+
+    @AfterClass public static void tearDown() {
+        TimeZone.setDefault(defaultTimezone);
     }
 
     // TODO could use LoggerRule only if it were extracted to an independent library
@@ -161,7 +172,7 @@ public class RunIdMigratorTest {
     // TODO test sane recovery from various error conditions
 
     private void write(String file, String text) throws Exception {
-        FileUtils.write(new File(dir, file), text);
+        FileUtils.write(new File(dir, file), text, Charset.defaultCharset());
     }
 
     private void link(String symlink, String dest) throws Exception {
@@ -173,14 +184,14 @@ public class RunIdMigratorTest {
     }
     private static String summarize(File dir) throws Exception {
         File[] kids = dir.listFiles();
-        Map<String,String> m = new TreeMap<String,String>();
+        Map<String,String> m = new TreeMap<>();
         for (File kid : kids) {
             String notation;
             String symlink = Util.resolveSymlink(kid);
             if (symlink != null) {
                 notation = "→" + symlink;
             } else if (kid.isFile()) {
-                notation = "'" + FileUtils.readFileToString(kid) + "'";
+                notation = "'" + FileUtils.readFileToString(kid, Charset.defaultCharset()) + "'";
             } else if (kid.isDirectory()) {
                 notation = summarize(kid);
             } else {
@@ -196,12 +207,7 @@ public class RunIdMigratorTest {
         File dest = new File(tmp.getRoot(), "dest");
         RunIdMigrator.move(src, dest);
         File dest2 = tmp.newFile();
-        try {
-            RunIdMigrator.move(dest, dest2);
-            fail();
-        } catch (IOException x) {
-            System.err.println("Got expected move exception: " + x);
-        }
+        assertThrows(IOException.class, () -> RunIdMigrator.move(dest, dest2));
     }
 
 }

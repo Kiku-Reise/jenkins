@@ -2,6 +2,7 @@ package hudson.model;
 
 import hudson.Functions;
 import hudson.security.ACL;
+import hudson.security.ACLContext;
 import hudson.util.StreamTaskListener;
 import java.io.File;
 import java.io.IOException;
@@ -80,6 +81,7 @@ public abstract class AsyncPeriodicWork extends PeriodicWork {
     /**
      * Schedules this periodic work now in a new thread, if one isn't already running.
      */
+    @Override
     @SuppressWarnings("deprecation") // in this case we really want to use PeriodicWork.logger since it reports the impl class
     public final void doRun() {
         try {
@@ -87,34 +89,32 @@ public abstract class AsyncPeriodicWork extends PeriodicWork {
                 logger.log(this.getSlowLoggingLevel(), "{0} thread is still running. Execution aborted.", name);
                 return;
             }
-            thread = new Thread(new Runnable() {
-                public void run() {
-                    logger.log(getNormalLoggingLevel(), "Started {0}", name);
-                    long startTime = System.currentTimeMillis();
-                    long stopTime;
+            thread = new Thread(() -> {
+                logger.log(getNormalLoggingLevel(), "Started {0}", name);
+                long startTime = System.currentTimeMillis();
+                long stopTime;
 
-                    StreamTaskListener l = createListener();
-                    try {
-                        l.getLogger().printf("Started at %tc%n", new Date(startTime));
-                        ACL.impersonate(ACL.SYSTEM);
-
+                StreamTaskListener l = createListener();
+                try {
+                    l.getLogger().printf("Started at %tc%n", new Date(startTime));
+                    try (ACLContext ctx = ACL.as2(ACL.SYSTEM2)) {
                         execute(l);
-                    } catch (IOException e) {
-                        Functions.printStackTrace(e, l.fatalError(e.getMessage()));
-                    } catch (InterruptedException e) {
-                        Functions.printStackTrace(e, l.fatalError("aborted"));
-                    } finally {
-                        stopTime = System.currentTimeMillis();
-                        try {
-                            l.getLogger().printf("Finished at %tc. %dms%n", new Date(stopTime), stopTime - startTime);
-                        } finally {
-                            l.closeQuietly();
-                        }
                     }
-
-                    logger.log(getNormalLoggingLevel(), "Finished {0}. {1,number} ms",
-                            new Object[]{name, stopTime - startTime});
+                } catch (IOException e) {
+                    Functions.printStackTrace(e, l.fatalError(e.getMessage()));
+                } catch (InterruptedException e) {
+                    Functions.printStackTrace(e, l.fatalError("aborted"));
+                } finally {
+                    stopTime = System.currentTimeMillis();
+                    try {
+                        l.getLogger().printf("Finished at %tc. %dms%n", new Date(stopTime), stopTime - startTime);
+                    } finally {
+                        l.closeQuietly();
+                    }
                 }
+
+                logger.log(getNormalLoggingLevel(), "Finished {0}. {1,number} ms",
+                        new Object[]{name, stopTime - startTime});
             },name+" thread");
             thread.start();
         } catch (Throwable t) {
@@ -133,7 +133,7 @@ public abstract class AsyncPeriodicWork extends PeriodicWork {
             }
         }
         if (f.isFile()) {
-            if ((lastRotateMillis + logRotateMillis < System.currentTimeMillis())
+            if (lastRotateMillis + logRotateMillis < System.currentTimeMillis()
                     || (logRotateSize > 0 && f.length() > logRotateSize)) {
                 lastRotateMillis = System.currentTimeMillis();
                 File prev = null;
@@ -158,7 +158,7 @@ public abstract class AsyncPeriodicWork extends PeriodicWork {
         } else {
             lastRotateMillis = System.currentTimeMillis();
             // migrate old log files the first time we start-up
-            File oldFile = new File(Jenkins.getActiveInstance().getRootDir(), f.getName());
+            File oldFile = new File(Jenkins.get().getRootDir(), f.getName());
             if (oldFile.isFile()) {
                 File newFile = new File(f.getParentFile(), f.getName() + ".1");
                 if (!newFile.isFile()) {

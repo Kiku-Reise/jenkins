@@ -23,21 +23,19 @@
  */
 package hudson.model;
 
+import hudson.Extension;
+import hudson.model.Descriptor.FormException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-
 import javax.servlet.ServletException;
-
 import jenkins.model.Jenkins;
 import org.jenkinsci.Symbol;
+import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.DataBoundConstructor;
-import hudson.model.Descriptor.FormException;
-import hudson.Extension;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
@@ -75,12 +73,7 @@ public class MyView extends View {
 
     @Override
     public Collection<TopLevelItem> getItems() {
-        List<TopLevelItem> items = new ArrayList<TopLevelItem>();
-        for (TopLevelItem item : getOwner().getItemGroup().getItems()) {
-            if (item.hasPermission(Item.CONFIGURE)) {
-                items.add(item);
-            }
-        }
+        List<TopLevelItem> items = new ArrayList<>(getOwner().getItemGroup().getItems(item -> item.hasPermission(Item.CONFIGURE)));
         return Collections.unmodifiableList(items);
     }
 
@@ -102,9 +95,10 @@ public class MyView extends View {
          */
         @Override
         public boolean isInstantiable() {
-            return Jenkins.getInstance().isUseSecurity();
+            return Jenkins.get().isUseSecurity();
         }
 
+        @Override
         public String getDisplayName() {
             return Messages.MyView_DisplayName();
         }

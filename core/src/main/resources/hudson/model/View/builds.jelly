@@ -36,11 +36,8 @@ THE SOFTWARE.
       <j:if test="${!request.getParameter('suppressTimelineControl')}"> <!-- cf. BuildListTableTest; breaks HtmlUnit -->
         <st:include page="control.jelly" it="${it.timeline}"/>
       </j:if>
-      <div style="height:2em"/><!-- spacer -->
+      <div class="spacer" />
 
-      <div>
-          <a href="cc.xml">${%Export as plain XML}</a> (<a href="cc.xml?recursive">${%Recurse in subfolders}</a>)
-      </div>
       <t:buildListTable builds="${it.builds}"/>
     </l:main-panel>
   </l:layout>

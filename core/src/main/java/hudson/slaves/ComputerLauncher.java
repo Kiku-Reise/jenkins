@@ -23,14 +23,19 @@
  */
 package hudson.slaves;
 
-import hudson.ExtensionPoint;
 import hudson.Extension;
-import hudson.model.*;
+import hudson.ExtensionPoint;
+import hudson.model.AbstractDescribableImpl;
+import hudson.model.Computer;
+import hudson.model.TaskListener;
 import hudson.remoting.Channel;
 import hudson.util.DescriptorList;
 import hudson.util.StreamTaskListener;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.tools.ant.util.DeweyDecimal;
@@ -54,7 +59,7 @@ import org.apache.tools.ant.util.DeweyDecimal;
 public abstract class ComputerLauncher extends AbstractDescribableImpl<ComputerLauncher> implements ExtensionPoint {
     /**
      * Returns true if this {@link ComputerLauncher} supports
-     * programatic launch of the agent in the target {@link Computer}.
+     * programmatic launch of the agent in the target {@link Computer}.
      */
     public boolean isLaunchSupported() {
         return true;
@@ -166,7 +171,7 @@ public abstract class ComputerLauncher extends AbstractDescribableImpl<ComputerL
     public static final DescriptorList<ComputerLauncher> LIST = new DescriptorList<>(ComputerLauncher.class);
 
     /**
-     * Given the output of "java -version" in <code>r</code>, determine if this
+     * Given the output of "java -version" in {@code r}, determine if this
      * version of Java is supported, or throw {@link IOException}.
      *
      * @param logger
@@ -180,7 +185,7 @@ public abstract class ComputerLauncher extends AbstractDescribableImpl<ComputerL
                                     final BufferedReader r)
             throws IOException {
         String line;
-        Pattern p = Pattern.compile("(?i)(?:java|openjdk) version \"([0-9.]+).*\"");
+        Pattern p = Pattern.compile("(?i)(?:java|openjdk) version \"([0-9.]+).*\".*");
         while (null != (line = r.readLine())) {
             Matcher m = p.matcher(line);
             if (m.matches()) {

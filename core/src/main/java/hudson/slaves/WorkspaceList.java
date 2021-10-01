@@ -23,20 +23,20 @@
  */
 package hudson.slaves;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.FilePath;
 import hudson.Functions;
-import jenkins.util.SystemProperties;
 import hudson.model.Computer;
 import hudson.model.DirectoryBrowserSupport;
 import java.io.Closeable;
-
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
+import jenkins.util.SystemProperties;
 
 /**
  * Used by {@link Computer} to keep track of workspaces that are actively in use.
@@ -77,7 +77,7 @@ public final class WorkspaceList {
          */
         public final boolean quick;
 
-        public final @Nonnull FilePath path;
+        public final @NonNull FilePath path;
 
         /**
          * Multiple threads can acquire the same lock if they share the same context object.
@@ -86,11 +86,11 @@ public final class WorkspaceList {
         
         public int lockCount=1;
 
-        private Entry(@Nonnull FilePath path, boolean quick) {
+        private Entry(@NonNull FilePath path, boolean quick) {
             this(path,quick,new Object()); // unique context
         }
         
-        private Entry(@Nonnull FilePath path, boolean quick, Object context) {
+        private Entry(@NonNull FilePath path, boolean quick, Object context) {
             this.path = path;
             this.quick = quick;
             this.context = context;
@@ -108,10 +108,10 @@ public final class WorkspaceList {
     /**
      * Represents a leased workspace that needs to be returned later.
      */
-    public static abstract class Lease implements /*Auto*/Closeable {
-        public final @Nonnull FilePath path;
+    public abstract static class Lease implements /*Auto*/Closeable {
+        public final @NonNull FilePath path;
 
-        protected Lease(@Nonnull FilePath path) {
+        protected Lease(@NonNull FilePath path) {
             if (path == null) { // Protection from old API
                 throw new NullPointerException("The specified FilePath is null");
             }
@@ -134,8 +134,9 @@ public final class WorkspaceList {
         /**
          * Creates a dummy {@link Lease} object that does no-op in the release.
          */
-        public static Lease createDummyLease(@Nonnull FilePath p) {
+        public static Lease createDummyLease(@NonNull FilePath p) {
             return new Lease(p) {
+                @Override
                 public void release() {
                     // noop
                 }
@@ -146,8 +147,9 @@ public final class WorkspaceList {
          * Creates a {@link Lease} object that points  to the specified path, but the lock
          * is controlled by the given parent lease object.
          */
-        public static Lease createLinkedDummyLease(@Nonnull FilePath p, final Lease parent) {
+        public static Lease createLinkedDummyLease(@NonNull FilePath p, final Lease parent) {
             return new Lease(p) {
+                @Override
                 public void release() {
                     parent.release();
                 }
@@ -155,7 +157,7 @@ public final class WorkspaceList {
         }
     }
 
-    private final Map<FilePath,Entry> inUse = new HashMap<>();
+    private final Map<String, Entry> inUse = new HashMap<>();
 
     public WorkspaceList() {
     }
@@ -167,7 +169,7 @@ public final class WorkspaceList {
      * This method doesn't block prolonged amount of time. Whenever a desired workspace
      * is in use, the unique variation is added.
      */
-    public synchronized Lease allocate(@Nonnull FilePath base) throws InterruptedException {
+    public synchronized Lease allocate(@NonNull FilePath base) throws InterruptedException {
         return allocate(base,new Object());
     }
 
@@ -178,10 +180,10 @@ public final class WorkspaceList {
      *      Threads that share the same context can re-acquire the same lock (which will just increment the lock count.)
      *      This allows related executors to share the same workspace.
      */
-    public synchronized Lease allocate(@Nonnull FilePath base, Object context) throws InterruptedException {
+    public synchronized Lease allocate(@NonNull FilePath base, Object context) throws InterruptedException {
         for (int i=1; ; i++) {
             FilePath candidate = i==1 ? base : base.withSuffix(COMBINATOR+i);
-            Entry e = inUse.get(candidate);
+            Entry e = inUse.get(candidate.getRemote());
             if(e!=null && !e.quick && e.context!=context)
                 continue;
             return acquire(candidate,false,context);
@@ -191,11 +193,11 @@ public final class WorkspaceList {
     /**
      * Just record that this workspace is being used, without paying any attention to the synchronization support.
      */
-    public synchronized Lease record(@Nonnull FilePath p) {
+    public synchronized Lease record(@NonNull FilePath p) {
         if (LOGGER.isLoggable(Level.FINE)) {
             LOGGER.log(Level.FINE, "recorded " + p, new Throwable("from " + this));
         }
-        Entry old = inUse.put(p, new Entry(p, false));
+        Entry old = inUse.put(p.getRemote(), new Entry(p, false));
         if (old!=null)
             throw new AssertionError("Tried to record a workspace already owned: "+old);
         return lease(p);
@@ -204,8 +206,8 @@ public final class WorkspaceList {
     /**
      * Releases an allocated or acquired workspace.
      */
-    private synchronized void _release(@Nonnull FilePath p) {
-        Entry old = inUse.get(p);
+    private synchronized void _release(@NonNull FilePath p) {
+        Entry old = inUse.get(p.getRemote());
         if (old==null)
             throw new AssertionError("Releasing unallocated workspace "+p);
         if (LOGGER.isLoggable(Level.FINE)) {
@@ -213,7 +215,7 @@ public final class WorkspaceList {
         }
         old.lockCount--;
         if (old.lockCount==0)
-            inUse.remove(p);
+            inUse.remove(p.getRemote());
         notifyAll();
     }
 
@@ -223,7 +225,7 @@ public final class WorkspaceList {
      * @return
      *      The same {@link FilePath} as given to this method.
      */
-    public synchronized Lease acquire(@Nonnull FilePath p) throws InterruptedException {
+    public synchronized Lease acquire(@NonNull FilePath p) throws InterruptedException {
         return acquire(p,false);
     }
 
@@ -234,7 +236,7 @@ public final class WorkspaceList {
      *      If true, indicates that the acquired workspace will be returned quickly.
      *      This makes other calls to {@link #allocate(FilePath)} to wait for the release of this workspace.
      */
-    public synchronized Lease acquire(@Nonnull FilePath p, boolean quick) throws InterruptedException {
+    public synchronized Lease acquire(@NonNull FilePath p, boolean quick) throws InterruptedException {
         return acquire(p,quick,new Object());
     }
     
@@ -245,7 +247,7 @@ public final class WorkspaceList {
      *      Threads that share the same context can re-acquire the same lock (which will just increment the lock count.)
      *      This allows related executors to share the same workspace.
      */
-    public synchronized Lease acquire(@Nonnull FilePath p, boolean quick, Object context) throws InterruptedException {
+    public synchronized Lease acquire(@NonNull FilePath p, boolean quick, Object context) throws InterruptedException {
         Entry e;
 
         Thread t = Thread.currentThread();
@@ -253,7 +255,7 @@ public final class WorkspaceList {
         t.setName("Waiting to acquire "+p+" : "+t.getName());
         try {
             while (true) {
-                e = inUse.get(p);
+                e = inUse.get(p.getRemote());
                 if (e==null || e.context==context)
                     break;
                 wait();
@@ -266,16 +268,17 @@ public final class WorkspaceList {
         }
         
         if (e!=null)    e.lockCount++;
-        else            inUse.put(p,new Entry(p,quick,context));
+        else            inUse.put(p.getRemote(), new Entry(p,quick,context));
         return lease(p);
     }
 
     /**
      * Wraps a path into a valid lease.
      */
-    private Lease lease(@Nonnull FilePath p) {
+    private Lease lease(@NonNull FilePath p) {
         return new Lease(p) {
             final AtomicBoolean released = new AtomicBoolean();
+            @Override
             public void release() {
                 _release(path);
             }
@@ -296,12 +299,13 @@ public final class WorkspaceList {
      * acknowledging that these will be readable by builds of other jobs done on the same node.
      * <p>Each plugin using this directory is responsible for specifying sufficiently unique subdirectory/file names.
      * {@link FilePath#createTempFile} may be used for this purpose if desired.
-     * <p>The resulting directory may not exist; you may call {@link FilePath#mkdirs} on it if you need it to.
+     * <p>The resulting directory may not exist; you may call {@link FilePath#mkdirs()} on it if you need it to.
      * It may be deleted alongside the workspace itself during cleanup actions.
      * @param ws a directory such as a build workspace
-     * @return a sibling directory, for example {@code …/something@tmp} for {@code …/something}
+     * @return a sibling directory, for example {@code …/something@tmp} for {@code …/something}, or {@code null} if {@link FilePath#getParent} is null
      * @since 1.652
      */
+    @CheckForNull
     public static FilePath tempDir(FilePath ws) {
         return ws.sibling(ws.getName() + COMBINATOR + "tmp");
     }
@@ -310,6 +314,7 @@ public final class WorkspaceList {
 
     /**
      * The token that combines the project name and unique number to create unique workspace directory.
+     * @since 2.244
      */
-    private static final String COMBINATOR = SystemProperties.getString(WorkspaceList.class.getName(),"@");
+    public static final String COMBINATOR = SystemProperties.getString(WorkspaceList.class.getName(),"@");
 }

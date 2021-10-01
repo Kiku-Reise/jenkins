@@ -24,21 +24,20 @@
 
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.search.Search;
 import hudson.search.UserSearchProperty;
-import jenkins.model.Jenkins;
-import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.export.Flavor;
-
-import javax.servlet.ServletException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import javax.annotation.CheckForNull;
+import javax.servlet.ServletException;
+import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.export.Flavor;
 
 /**
  * Data representation of the auto-completion candidates.
@@ -48,7 +47,7 @@ import org.apache.commons.lang.StringUtils;
  * @author Kohsuke Kawaguchi
  */
 public class AutoCompletionCandidates implements HttpResponse {
-    private final List<String> values = new ArrayList<String>();
+    private final List<String> values = new ArrayList<>();
 
     public AutoCompletionCandidates add(String v) {
         values.add(v);
@@ -68,6 +67,7 @@ public class AutoCompletionCandidates implements HttpResponse {
         return values;
     }
 
+    @Override
     public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object o) throws IOException, ServletException {
         Search.Result r = new Search.Result();
         for (String value : values) {
@@ -154,12 +154,12 @@ public class AutoCompletionCandidates implements HttpResponse {
             }
         }
 
-        if (container==null || container==Jenkins.getInstance()) {
-            new Visitor("").onItemGroup(Jenkins.getInstance());
+        if (container==null || container==Jenkins.get()) {
+            new Visitor("").onItemGroup(Jenkins.get());
         } else {
             new Visitor("").onItemGroup(container);
             if (value.startsWith("/"))
-                new Visitor("/").onItemGroup(Jenkins.getInstance());
+                new Visitor("/").onItemGroup(Jenkins.get());
 
             for ( String p="../"; value.startsWith(p); p+="../") {
                 container = ((Item)container).getParent();

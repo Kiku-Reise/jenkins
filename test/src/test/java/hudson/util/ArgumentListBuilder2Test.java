@@ -27,26 +27,25 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.*;
+import static org.junit.Assume.assumeThat;
+import static org.junit.Assume.assumeTrue;
+
 import hudson.Functions;
 import hudson.Launcher.LocalLauncher;
 import hudson.Launcher.RemoteLauncher;
 import hudson.Proc;
 import hudson.model.Slave;
-
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.StringWriter;
+import java.util.logging.Level;
+import jenkins.util.SystemProperties;
 import org.apache.tools.ant.util.JavaEnvUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Email;
 import org.jvnet.hudson.test.JenkinsRule;
-
-import com.google.common.base.Joiner;
-
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.StringWriter;
-import java.net.URL;
+import org.jvnet.hudson.test.LoggerRule;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -55,6 +54,11 @@ public class ArgumentListBuilder2Test {
 
     @Rule
     public JenkinsRule j = new JenkinsRule();
+
+    @Rule
+    public LoggerRule logging = new LoggerRule().
+        record(StreamTaskListener.class, Level.FINE).
+        record(SystemProperties.class, Level.FINE);
 
     /**
      * Makes sure {@link RemoteLauncher} properly masks arguments.
@@ -66,13 +70,12 @@ public class ArgumentListBuilder2Test {
         args.add("java");
         args.addMasked("-version");
 
-        Slave s = j.createSlave();
-        s.toComputer().connect(false).get();
+        Slave s = j.createOnlineSlave();
+        j.showAgentLogs(s, logging);
 
         StringWriter out = new StringWriter();
         assertEquals(0,s.createLauncher(new StreamTaskListener(out)).launch().cmds(args).join());
-        System.out.println(out);
-        assertTrue(out.toString().contains("$ java ********"));
+        assertThat(out.toString(), containsString("$ java ********"));
     }
 
     @Test
@@ -87,7 +90,7 @@ public class ArgumentListBuilder2Test {
 
         String out = echoArgs(specials);
 
-        String expected = String.format("%n%s", Joiner.on(" ").join(specials));
+        String expected = String.format("%n%s", String.join(" ", specials));
         assertThat(out, containsString(expected));
     }
 

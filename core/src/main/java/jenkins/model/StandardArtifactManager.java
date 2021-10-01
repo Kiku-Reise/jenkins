@@ -24,6 +24,8 @@
 
 package jenkins.model;
 
+import com.google.common.annotations.VisibleForTesting;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Util;
@@ -34,7 +36,10 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.util.SystemProperties;
 import jenkins.util.VirtualFile;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
  * Default artifact manager which transfers files over the remoting channel and stores them inside the build directory.
@@ -44,6 +49,13 @@ import jenkins.util.VirtualFile;
 public class StandardArtifactManager extends ArtifactManager {
 
     private static final Logger LOG = Logger.getLogger(StandardArtifactManager.class.getName());
+
+    @Restricted(NoExternalUse.class)
+    @VisibleForTesting
+    @SuppressFBWarnings("MS_SHOULD_BE_FINAL")
+    public static FilePath.TarCompression TAR_COMPRESSION = SystemProperties.getBoolean(StandardArtifactManager.class.getName() + ".disableTrafficCompression")
+            ? FilePath.TarCompression.NONE
+            : FilePath.TarCompression.GZIP;
 
     protected transient Run<?,?> build;
 
@@ -58,7 +70,7 @@ public class StandardArtifactManager extends ArtifactManager {
     @Override public void archive(FilePath workspace, Launcher launcher, BuildListener listener, final Map<String,String> artifacts) throws IOException, InterruptedException {
         File dir = getArtifactsDir();
         String description = "transfer of " + artifacts.size() + " files"; // TODO improve when just one file
-        workspace.copyRecursiveTo(new FilePath.ExplicitlySpecifiedDirScanner(artifacts), new FilePath(dir), description);
+        workspace.copyRecursiveTo(new FilePath.ExplicitlySpecifiedDirScanner(artifacts), new FilePath(dir), description, TAR_COMPRESSION);
     }
 
     @Override public final boolean delete() throws IOException, InterruptedException {

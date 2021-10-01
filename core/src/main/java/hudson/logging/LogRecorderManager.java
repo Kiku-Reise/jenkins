@@ -23,30 +23,15 @@
  */
 package hudson.logging;
 
+import static hudson.init.InitMilestone.PLUGINS_PREPARED;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.FeedAdapter;
 import hudson.Functions;
-import hudson.PluginManager;
 import hudson.init.Initializer;
-import static hudson.init.InitMilestone.PLUGINS_PREPARED;
 import hudson.model.AbstractModelObject;
-import jenkins.model.Jenkins;
 import hudson.model.RSS;
 import hudson.util.CopyOnWriteMap;
-import jenkins.model.JenkinsLocationConfiguration;
-import jenkins.model.ModelObjectWithChildren;
-import jenkins.model.ModelObjectWithContextMenu.ContextMenu;
-import org.apache.commons.io.filefilter.WildcardFileFilter;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerProxy;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.HttpRedirect;
-import org.kohsuke.stapler.interceptor.RequirePOST;
-
-import javax.servlet.ServletException;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
@@ -59,6 +44,22 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import javax.servlet.ServletException;
+import jenkins.model.Jenkins;
+import jenkins.model.JenkinsLocationConfiguration;
+import jenkins.model.ModelObjectWithChildren;
+import jenkins.model.ModelObjectWithContextMenu.ContextMenu;
+import jenkins.util.SystemProperties;
+import org.apache.commons.io.filefilter.WildcardFileFilter;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.HttpRedirect;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.StaplerProxy;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
  * Owner of {@link LogRecorder}s, bound to "/log".
@@ -69,12 +70,14 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
     /**
      * {@link LogRecorder}s keyed by their {@linkplain LogRecorder#name name}.
      */
-    public transient final Map<String,LogRecorder> logRecorders = new CopyOnWriteMap.Tree<String,LogRecorder>();
+    public final transient Map<String,LogRecorder> logRecorders = new CopyOnWriteMap.Tree<>();
 
+    @Override
     public String getDisplayName() {
         return Messages.LogRecorderManager_DisplayName();
     }
 
+    @Override
     public String getSearchUrl() {
         return "/log";
     }
@@ -88,7 +91,7 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
     }
 
     static File configDir() {
-        return new File(Jenkins.getInstance().getRootDir(), "log");
+        return new File(Jenkins.get().getRootDir(), "log");
     }
 
     /**
@@ -113,6 +116,8 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
      */
     @RequirePOST
     public HttpResponse doNewLogRecorder(@QueryParameter String name) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+
         Jenkins.checkGoodName(name);
         
         logRecorders.put(name,new LogRecorder(name));
@@ -121,6 +126,7 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
         return new HttpRedirect(name+"/configure");
     }
 
+    @Override
     public ContextMenu doChildrenContextMenu(StaplerRequest request, StaplerResponse response) throws Exception {
         ContextMenu menu = new ContextMenu();
         menu.add("all","All Jenkins Logs");
@@ -136,7 +142,7 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
     @edu.umd.cs.findbugs.annotations.SuppressFBWarnings("LG_LOST_LOGGER_DUE_TO_WEAK_REFERENCE")
     @RequirePOST
     public HttpResponse doConfigLogger(@QueryParameter String name, @QueryParameter String level) {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         Level lv;
         if(level.equals("inherit"))
             lv = null;
@@ -158,40 +164,48 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
      */
     /*package*/ static void doRss(StaplerRequest req, StaplerResponse rsp, List<LogRecord> logs) throws IOException, ServletException {
         // filter log records based on the log level
+        String entryType = "all";
         String level = req.getParameter("level");
         if(level!=null) {
             Level threshold = Level.parse(level);
-            List<LogRecord> filtered = new ArrayList<LogRecord>();
+            List<LogRecord> filtered = new ArrayList<>();
             for (LogRecord r : logs) {
                 if(r.getLevel().intValue() >= threshold.intValue())
                     filtered.add(r);
             }
             logs = filtered;
+            entryType = level;
         }
 
-        RSS.forwardToRss("Hudson log","", logs, new FeedAdapter<LogRecord>() {
+        RSS.forwardToRss("Jenkins:log (" + entryType + " entries)","", logs, new FeedAdapter<LogRecord>() {
+            @Override
             public String getEntryTitle(LogRecord entry) {
                 return entry.getMessage();
             }
 
+            @Override
             public String getEntryUrl(LogRecord entry) {
                 return "log";   // TODO: one URL for one log entry?
             }
 
+            @Override
             public String getEntryID(LogRecord entry) {
                 return String.valueOf(entry.getSequenceNumber());
             }
 
+            @Override
             public String getEntryDescription(LogRecord entry) {
                 return Functions.printLogRecord(entry);
             }
 
+            @Override
             public Calendar getEntryTimestamp(LogRecord entry) {
                 GregorianCalendar cal = new GregorianCalendar();
                 cal.setTimeInMillis(entry.getMillis());
                 return cal;
             }
 
+            @Override
             public String getEntryAuthor(LogRecord entry) {
                 return JenkinsLocationConfiguration.get().getAdminAddress();
             }
@@ -207,7 +221,7 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
     @Restricted(NoExternalUse.class)
     public Object getTarget() {
         if (!SKIP_PERMISSION_CHECK) {
-            Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+            Jenkins.get().checkPermission(Jenkins.SYSTEM_READ);
         }
         return this;
     }
@@ -216,5 +230,6 @@ public class LogRecorderManager extends AbstractModelObject implements ModelObje
      * Escape hatch for StaplerProxy-based access control
      */
     @Restricted(NoExternalUse.class)
-    public static /* Script Console modifiable */ boolean SKIP_PERMISSION_CHECK = Boolean.getBoolean(LogRecorderManager.class.getName() + ".skipPermissionCheck");
+    @SuppressFBWarnings("MS_SHOULD_BE_FINAL")
+    public static /* Script Console modifiable */ boolean SKIP_PERMISSION_CHECK = SystemProperties.getBoolean(LogRecorderManager.class.getName() + ".skipPermissionCheck");
 }

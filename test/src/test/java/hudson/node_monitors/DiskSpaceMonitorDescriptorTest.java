@@ -4,11 +4,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import org.junit.Rule;
-import org.junit.Test;
+import hudson.node_monitors.DiskSpaceMonitorDescriptor.DiskSpace;
 import hudson.slaves.DumbSlave;
 import hudson.slaves.SlaveComputer;
-import hudson.node_monitors.DiskSpaceMonitorDescriptor.DiskSpace;
+import org.junit.Rule;
+import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.WithoutJenkins;
@@ -48,5 +48,15 @@ public class DiskSpaceMonitorDescriptorTest {
         assertEquals(1024*1024,DiskSpace.parse("1MB").size);
         assertEquals(1024*1024*1024,DiskSpace.parse("1GB").size);
         assertEquals(512*1024*1024,DiskSpace.parse("0.5GB").size);
+    }
+
+    @Test
+    @WithoutJenkins
+    @Issue("JENKINS-59383")
+    public void string() {
+        DiskSpace du = new DiskSpace("/tmp", 123*1024*1024);
+        assertEquals("0.123GB left on /tmp.", du.toString());
+        du.setTriggered(true);
+        assertEquals("Disk space is too low. Only 0.123GB left on /tmp.", du.toString());
     }
 }

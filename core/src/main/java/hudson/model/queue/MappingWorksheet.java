@@ -23,7 +23,8 @@
  */
 package hudson.model.queue;
 
-import com.google.common.collect.ImmutableList;
+import static java.lang.Math.max;
+
 import com.google.common.collect.Iterables;
 import hudson.model.Computer;
 import hudson.model.Executor;
@@ -37,17 +38,14 @@ import hudson.model.Queue.JobOffer;
 import hudson.model.Queue.Task;
 import hudson.model.labels.LabelAssignmentAction;
 import hudson.security.ACL;
-
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-
-import static java.lang.Math.*;
 
 /**
  * Defines a mapping problem for answering "where do we execute this task?"
@@ -100,10 +98,12 @@ public class MappingWorksheet {
             this.base = base;
         }
 
+        @Override
         public E get(int index) {
             return base.get(index);
         }
 
+        @Override
         public int size() {
             return base.size();
         }
@@ -134,7 +134,7 @@ public class MappingWorksheet {
             if (c.assignedLabel!=null && !c.assignedLabel.contains(node))
                 return false;   // label mismatch
 
-            if (!(Node.SKIP_BUILD_CHECK_ON_FLYWEIGHTS && item.task instanceof Queue.FlyweightTask) && !nodeAcl.hasPermission(item.authenticate(), Computer.BUILD))
+            if (!(Node.SKIP_BUILD_CHECK_ON_FLYWEIGHTS && item.task instanceof Queue.FlyweightTask) && !nodeAcl.hasPermission2(item.authenticate2(), Computer.BUILD))
                 return false;   // tasks don't have a permission to run on this node
 
             return true;
@@ -171,12 +171,6 @@ public class MappingWorksheet {
      */
     public class WorkChunk extends ReadOnlyList<SubTask> {
         public final int index;
-
-        // the main should be always at position 0
-//        /**
-//         * This chunk includes {@linkplain WorkUnit#isMainWork() the main work unit}.
-//         */
-//        public final boolean isMain;
 
         /**
          * If this task needs to be run on a node with a particular label,
@@ -218,7 +212,7 @@ public class MappingWorksheet {
         }
 
         public List<ExecutorChunk> applicableExecutorChunks() {
-            List<ExecutorChunk> r = new ArrayList<ExecutorChunk>(executors.size());
+            List<ExecutorChunk> r = new ArrayList<>(executors.size());
             for (ExecutorChunk e : executors) {
                 if (e.canAccept(this))
                     r.add(e);
@@ -270,7 +264,7 @@ public class MappingWorksheet {
          * Returns the assignment as a map.
          */
         public Map<WorkChunk,ExecutorChunk> toMap() {
-            Map<WorkChunk,ExecutorChunk> r = new HashMap<WorkChunk,ExecutorChunk>();
+            Map<WorkChunk,ExecutorChunk> r = new HashMap<>();
             for (int i=0; i<size(); i++)
                 r.put(get(i),assigned(i));
             return r;
@@ -322,12 +316,10 @@ public class MappingWorksheet {
         this.item = item;
         
         // group executors by their computers
-        Map<Computer,List<ExecutorSlot>> j = new HashMap<Computer, List<ExecutorSlot>>();
+        Map<Computer,List<ExecutorSlot>> j = new HashMap<>();
         for (ExecutorSlot o : offers) {
             Computer c = o.getExecutor().getOwner();
-            List<ExecutorSlot> l = j.get(c);
-            if (l==null)
-                j.put(c,l=new ArrayList<ExecutorSlot>());
+            List<ExecutorSlot> l = j.computeIfAbsent(c, k -> new ArrayList<>());
             l.add(o);
         }
 
@@ -335,7 +327,7 @@ public class MappingWorksheet {
             long duration = item.task.getEstimatedDuration();
             if (duration > 0) {
                 long now = System.currentTimeMillis();
-                for (Entry<Computer, List<ExecutorSlot>> e : j.entrySet()) {
+                for (Map.Entry<Computer, List<ExecutorSlot>> e : j.entrySet()) {
                     final List<ExecutorSlot> list = e.getValue();
                     final int max = e.getKey().countExecutors();
 
@@ -363,33 +355,31 @@ public class MappingWorksheet {
         }
 
         // build into the final shape
-        List<ExecutorChunk> executors = new ArrayList<ExecutorChunk>();
+        List<ExecutorChunk> executors = new ArrayList<>();
         for (List<ExecutorSlot> group : j.values()) {
             if (group.isEmpty())    continue;   // evict empty group
             ExecutorChunk ec = new ExecutorChunk(group, executors.size());
             if (ec.node==null)  continue;   // evict out of sync node
             executors.add(ec);
         }
-        this.executors = ImmutableList.copyOf(executors);
+        this.executors = Collections.unmodifiableList(executors);
 
         // group execution units into chunks. use of LinkedHashMap ensures that the main work comes at the top
-        Map<Object,List<SubTask>> m = new LinkedHashMap<Object,List<SubTask>>();
+        Map<Object,List<SubTask>> m = new LinkedHashMap<>();
         for (SubTask meu : item.task.getSubTasks()) {
             Object c = meu.getSameNodeConstraint();
             if (c==null)    c = new Object();
 
-            List<SubTask> l = m.get(c);
-            if (l==null)
-                m.put(c,l= new ArrayList<SubTask>());
+            List<SubTask> l = m.computeIfAbsent(c, k -> new ArrayList<>());
             l.add(meu);
         }
 
         // build into the final shape
-        List<WorkChunk> works = new ArrayList<WorkChunk>();
+        List<WorkChunk> works = new ArrayList<>();
         for (List<SubTask> group : m.values()) {
             works.add(new WorkChunk(group,works.size()));
         }
-        this.works = ImmutableList.copyOf(works);
+        this.works = Collections.unmodifiableList(works);
     }
 
     public WorkChunk works(int index) {
@@ -400,7 +390,7 @@ public class MappingWorksheet {
         return executors.get(index);
     }
 
-    public static abstract class ExecutorSlot {
+    public abstract static class ExecutorSlot {
         public abstract Executor getExecutor();
 
         public abstract boolean isAvailable();

@@ -24,20 +24,19 @@
  */
 package hudson.util;
 
-import hudson.Util;
-import jenkins.model.Jenkins;
-import jenkins.security.CryptoConfidentialKey;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
+import hudson.Util;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import jenkins.model.Jenkins;
+import jenkins.security.CryptoConfidentialKey;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
  * Historical algorithms for decrypting {@link Secret}s.
@@ -81,9 +80,15 @@ public class HistoricalSecrets {
      */
     @Deprecated
     /*package*/ static SecretKey getLegacyKey() throws GeneralSecurityException {
-        String secret = Secret.SECRET;
-        if(secret==null)    return Jenkins.getInstance().getSecretKeyAsAES128();
-        return Util.toAes128Key(secret);
+        if (Secret.SECRET != null) {
+            return Util.toAes128Key(Secret.SECRET);
+        }
+        Jenkins j = Jenkins.getInstanceOrNull();
+        if (j != null) {
+            return j.getSecretKeyAsAES128();
+        } else {
+            return Util.toAes128Key("mock");
+        }
     }
 
     static final String MAGIC = "::::MAGIC::::";

@@ -24,8 +24,17 @@
  */
 package hudson;
 
-import com.google.common.collect.ImmutableSet;
+import static hudson.PluginWrapper.PluginDisableStatus.ALREADY_DISABLED;
+import static hudson.PluginWrapper.PluginDisableStatus.DISABLED;
+import static hudson.PluginWrapper.PluginDisableStatus.ERROR_DISABLING;
+import static hudson.PluginWrapper.PluginDisableStatus.NOT_DISABLED_DEPENDANTS;
+import static hudson.PluginWrapper.PluginDisableStatus.NO_SUCH_PLUGIN;
+import static java.util.logging.Level.WARNING;
+import static org.apache.commons.io.FilenameUtils.getBaseName;
+
 import com.google.common.collect.Sets;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.PluginManager.PluginInstanceStore;
 import hudson.model.AdministrativeMonitor;
 import hudson.model.Api;
@@ -34,33 +43,15 @@ import hudson.model.UpdateCenter;
 import hudson.model.UpdateSite;
 import hudson.util.VersionNumber;
 import io.jenkins.lib.versionnumber.JavaSpecificationVersion;
-import jenkins.YesNoMaybe;
-import jenkins.model.Jenkins;
-import jenkins.util.java.JavaUtils;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.LogFactory;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.DoNotUse;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.HttpResponses;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.export.ExportedBean;
-import org.kohsuke.stapler.interceptor.RequirePOST;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -77,14 +68,26 @@ import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
-import static hudson.PluginWrapper.PluginDisableStatus.ALREADY_DISABLED;
-import static hudson.PluginWrapper.PluginDisableStatus.DISABLED;
-import static hudson.PluginWrapper.PluginDisableStatus.ERROR_DISABLING;
-import static hudson.PluginWrapper.PluginDisableStatus.NOT_DISABLED_DEPENDANTS;
-import static hudson.PluginWrapper.PluginDisableStatus.NO_SUCH_PLUGIN;
-import static java.util.logging.Level.WARNING;
-import static org.apache.commons.io.FilenameUtils.getBaseName;
+import jenkins.YesNoMaybe;
+import jenkins.model.Jenkins;
+import jenkins.plugins.DetachedPluginsUtil;
+import jenkins.security.UpdateSiteWarningsMonitor;
+import jenkins.util.AntClassLoader;
+import jenkins.util.URLClassLoader2;
+import jenkins.util.java.JavaUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.LogFactory;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.Beta;
+import org.kohsuke.accmod.restrictions.DoNotUse;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.HttpResponses;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
+import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
  * Represents a Jenkins plug-in and associated control information
@@ -110,6 +113,7 @@ import static org.apache.commons.io.FilenameUtils.getBaseName;
  */
 @ExportedBean
 public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
+
     /**
      * A plugin won't be loaded unless his declared dependencies are present and match the required minimal version.
      * This can be set to false to disable the version check (legacy behaviour)
@@ -219,21 +223,21 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      * The core can depend on a plugin if it is bundled. Sometimes it's the only thing that
      * depends on the plugin e.g. UI support library bundle plugin.
      */
-    private static Set<String> CORE_ONLY_DEPENDANT = ImmutableSet.copyOf(Arrays.asList("jenkins-core"));
+    private static Set<String> CORE_ONLY_DEPENDANT = Collections.singleton("jenkins-core");
 
     /**
      * Set the list of components that depend on this plugin.
      * @param dependents The list of components that depend on this plugin.
      */
-    public void setDependents(@Nonnull Set<String> dependents) {
+    public void setDependents(@NonNull Set<String> dependents) {
         this.dependents = dependents;
     }
 
     /**
-     * @deprecated Please use {@link setDependents}.
+     * @deprecated Please use {@link #setDependents}.
      */
     @Deprecated
-    public void setDependants(@Nonnull Set<String> dependents) {
+    public void setDependants(@NonNull Set<String> dependents) {
         setDependents(dependents);
     }
 
@@ -241,23 +245,24 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      * Set the list of components that depend optionally on this plugin.
      * @param optionalDependents The list of components that depend optionally on this plugin.
      */
-    public void setOptionalDependents(@Nonnull Set<String> optionalDependents) {
+    public void setOptionalDependents(@NonNull Set<String> optionalDependents) {
         this.optionalDependents = optionalDependents;
     }
 
     /**
-     * @deprecated Please use {@link setOptionalDependents}.
+     * @deprecated Please use {@link #setOptionalDependents}.
      */
     @Deprecated
-    public void setOptionalDependants(@Nonnull Set<String> optionalDependents) {
+    public void setOptionalDependants(@NonNull Set<String> optionalDependents) {
         setOptionalDependents(dependents);
     }
 
     /**
      * Get the list of components that depend on this plugin.
+     * Note that the list will include elements of {@link #getOptionalDependents}.
      * @return The list of components that depend on this plugin.
      */
-    public @Nonnull Set<String> getDependents() {
+    public @NonNull Set<String> getDependents() {
         if (isBundled && dependents.isEmpty()) {
             return CORE_ONLY_DEPENDANT;
         } else {
@@ -266,39 +271,61 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     }
 
     /**
-     * @deprecated Please use {@link getDependents}.
+     * @deprecated Please use {@link #getDependents}.
      */
     @Deprecated
-    public @Nonnull Set<String> getDependants() {
+    public @NonNull Set<String> getDependants() {
         return getDependents();
+    }
+
+    /**
+     * Like {@link #getDependents} but excluding optional dependencies.
+     * @since 2.181
+     */
+    public @NonNull Set<String> getMandatoryDependents() {
+        Set<String> s = new HashSet<>(dependents);
+        s.removeAll(optionalDependents);
+        return s;
     }
 
     /**
      * @return The list of components that depend optionally on this plugin.
      */
-    public @Nonnull Set<String> getOptionalDependents() {
+    public @NonNull Set<String> getOptionalDependents() {
         return optionalDependents;
     }
 
     /**
-     * @deprecated Please use {@link getOptionalDependents}.
+     * @deprecated Please use {@link #getOptionalDependents}.
      */
     @Deprecated
-    public @Nonnull Set<String> getOptionalDependants() {
+    public @NonNull Set<String> getOptionalDependants() {
         return getOptionalDependents();
     }
 
     /**
      * Does this plugin have anything that depends on it.
+     * Note that optional dependents are included.
      * @return {@code true} if something (Jenkins core, or another plugin) depends on this
      * plugin, otherwise {@code false}.
      */
     public boolean hasDependents() {
-        return (isBundled || !dependents.isEmpty());
+        return isBundled || !dependents.isEmpty();
     }
 
     /**
-     * @deprecated Please use {@link hasDependents}.
+     * Like {@link #hasDependents} but excluding optional dependencies.
+     * @since 2.181
+     */
+    public boolean hasMandatoryDependents() {
+        if (isBundled) {
+            return true;
+        }
+        return dependents.stream().anyMatch(d -> !optionalDependents.contains(d));
+    }
+
+    /**
+     * @deprecated Please use {@link #hasDependents}.
      */
     @Deprecated
     public boolean hasDependants() {
@@ -315,7 +342,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     }
 
     /**
-     * @deprecated Please use {@link hasOptionalDependents}.
+     * @deprecated Please use {@link #hasOptionalDependents}.
      */
     @Deprecated
     public boolean hasOptionalDependants() {
@@ -324,10 +351,84 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
 
     /**
      * Does this plugin depend on any other plugins.
+     * Note that this include optional dependencies.
      * @return {@code true} if this plugin depends on other plugins, otherwise {@code false}.
      */
     public boolean hasDependencies() {
-        return (dependencies != null && !dependencies.isEmpty());
+        return !dependencies.isEmpty();
+    }
+
+    /**
+     * Like {@link #hasDependencies} but omitting optional dependencies.
+     * @since 2.181
+     */
+    public boolean hasMandatoryDependencies() {
+        return dependencies.stream().anyMatch(d -> !d.optional);
+    }
+
+    /**
+     * Is this plugin deprecated?
+     *
+     * @return {@code true} if and only if an update site reports deprecations for this plugin.
+     * @since 2.246
+     */
+    @Restricted(NoExternalUse.class)
+    public boolean isDeprecated() {
+        /*
+        While better handled in UpdateSite.Plugin that only exists for plugins actively being published.
+        We have no good model for plugin metadata from update sites for plugins not being published.
+         */
+        return !getDeprecations().isEmpty();
+    }
+
+    /**
+     * Inject the specified jar file(s) to the plugins classpath.
+     * <p><strong>Warning:</strong> This is advanced usage that you should not be needed in 99.9% of all cases, any jar insertion
+     * should happen early into the plugins lifecycle to prevent classloading issues in dependent plugins. 
+     * </p><p>
+     * Rather than use this functionality it is to have co-operative behaviour between any consumer of the libraries and load the classes in a separate {@link ClassLoader}.
+     * you can expose third-party libraries from a dynamic location in various ways, such as:
+     * 
+     * <ul>
+     * <li>You could split your plugin into two modules:
+     * <ul>
+     * <li>regular Jenkins plugin code, plus some interface encapsulating access to the lib via a minimal, simplified
+     * API
+     * <li>an implementation of that interface which compiles against a provided static reference copy of the library,
+     * and which is packaged in your plugin as a resource (not in WEB-INF/lib/*.jar)
+     * </ul>
+     * <li>with coordination:
+     * <ul>
+     * <li>dynamically find some JAR(s) on the controller (or perhaps even agent)
+     * <li>find the bridge JAR in your plugin’s resources area
+     * <li>create some {@link URLClassLoader} loading them both, parented to the plugin {@link ClassLoader}
+     * <li>use reflection to load &amp; instantiate the class of the bridge implementation, casting to the interface from
+     * the plugin
+     * </ul>
+     * </ul>
+     * For a concrete example see the <a href=
+     * "https://github.com/jenkinsci/database-plugin/blob/117.va2009e38b882/src/main/java/org/jenkinsci/plugins/database/GenericDatabase.java#L129-L142">database
+     * plugin</a>. *
+     * 
+     * @throws Exception if the File could not be inserted into the classpath for some reason.
+     * @since TODO
+     */
+    @Restricted(Beta.class)
+    public void injectJarsToClasspath(File... jars) throws Exception {
+        if (classLoader instanceof AntClassLoader) {
+            for (File f : jars) {
+                LOGGER.log(Level.CONFIG, () -> "Inserting " + f + " into " + shortName + " plugin's classpath");
+                ((AntClassLoader) classLoader).addPathComponent(f);
+            }
+        } else if (classLoader instanceof URLClassLoader2) {
+            for (File f : jars) {
+                LOGGER.log(Level.CONFIG, () -> "Inserting " + f + " into " + shortName + " plugin's classpath");
+                ((URLClassLoader2) classLoader).addURL(f.toURI().toURL());
+            }
+        } else {
+            throw new AssertionError("PluginWrapper classloader has changed type, but this code has not been updated accordingly");
+        }
+
     }
 
     @ExportedBean
@@ -352,6 +453,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
                 String osgiProperty = osgiProperties[i].trim();
                 if (osgiProperty.equalsIgnoreCase("resolution:=optional")) {
                     isOptional = true;
+                    break;
                 }
             }
             this.optional = isOptional;
@@ -394,15 +496,19 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
 		this.active = !disableFile.exists();
 		this.dependencies = dependencies;
 		this.optionalDependencies = optionalDependencies;
+        for (Dependency d : optionalDependencies) {
+            assert d.optional : d + " included among optionalDependencies of " + shortName + " but was not marked optional";
+        }
         this.archive = archive;
     }
 
+    @Override
     public String getDisplayName() {
         return StringUtils.removeStart(getLongName(), "Jenkins ");
     }
 
     public Api getApi() {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkAnyPermission(Jenkins.SYSTEM_READ, Jenkins.MANAGE);
         return new Api(this);
     }
 
@@ -438,9 +544,22 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
         return getBaseName(fileName);
     }
 
+    /**
+     * Gets all dependencies of this plugin on other plugins.
+     * Note that the list will <em>usually</em> include the members of {@link #getOptionalDependencies}
+     * (missing optional dependencies will however be omitted).
+     */
     @Exported
     public List<Dependency> getDependencies() {
         return dependencies;
+    }
+
+    /**
+     * Like {@link #getDependencies} but omits optional dependencies.
+     * @since 2.181
+     */
+    public List<Dependency> getMandatoryDependencies() {
+        return dependencies.stream().filter(d -> !d.optional).collect(Collectors.toList());
     }
 
     public List<Dependency> getOptionalDependencies() {
@@ -458,10 +577,23 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
 
     /**
      * Gets the instance of {@link Plugin} contributed by this plugin.
+     * @return Plugin instace or {@code null} if it is not present in the plugin instance store.
      */
     public @CheckForNull Plugin getPlugin() {
         PluginInstanceStore pis = Jenkins.lookup(PluginInstanceStore.class);
         return pis != null ? pis.store.get(this) : null;
+    }
+
+    /**
+     * Gets the instance of {@link Plugin} contributed by this plugin.
+     * @throws Exception no plugin in the {@link PluginInstanceStore}
+     */
+    public @NonNull Plugin getPluginOrFail() throws Exception {
+        Plugin plugin = getPlugin();
+        if (plugin == null) {
+            throw new Exception("Cannot find the plugin instance: " + shortName);
+        }
+        return plugin;
     }
 
     /**
@@ -472,28 +604,41 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      */
     @Exported
     public String getUrl() {
-        // first look for the manifest entry. This is new in maven-hpi-plugin 1.30
+        // first look in update center metadata
+        List<UpdateSite.Plugin> siteMetadataList = getInfoFromAllSites();
+        String firstSiteUrl = null;
+        if (!siteMetadataList.isEmpty()) {
+        	firstSiteUrl = siteMetadataList.get(0).wiki;
+            if (allUrlsMatch(firstSiteUrl, siteMetadataList)) {
+                return firstSiteUrl;
+            }
+        }
+
+        // if update sites give different / empty results,
+        // use manifest (since maven-hpi-plugin 1.30)
         String url = manifest.getMainAttributes().getValue("Url");
-        if(url!=null)      return url;
-
-        // fallback to update center metadata
-        UpdateSite.Plugin ui = getInfo();
-        if(ui!=null)    return ui.wiki;
-
-        return null;
+        if (url != null) {
+        	return url;
+        }
+        return firstSiteUrl;
     }
-    
-    
 
-    @Override
+    private boolean allUrlsMatch(String url, List<UpdateSite.Plugin> uiList) {
+        return uiList.stream().allMatch(k -> k.wiki != null && k.wiki.equals(url));
+    }
+
+	@Override
     public String toString() {
         return "Plugin:" + getShortName();
     }
 
     /**
      * Returns a one-line descriptive name of this plugin.
+     *
+     * @deprecated For most purposes, use {@link #getDisplayName()}.
      */
     @Exported
+    @Deprecated
     public String getLongName() {
         String name = manifest.getMainAttributes().getValue("Long-Name");
         if(name!=null)      return name;
@@ -546,12 +691,12 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
 
     /**
      * Returns the minimum Java version of this plugin, as specified in the plugin metadata.
-     * Generally coming from the <code>java.level</code> extracted as MANIFEST's metadata with
+     * Generally coming from the {@code java.level} extracted as MANIFEST's metadata with
      * <a href="https://github.com/jenkinsci/plugin-pom/pull/134">this addition on the plugins' parent pom</a>.
      *
-     * @see <a href="https://github.com/jenkinsci/maven-hpi-plugin/pull/75">maven-hpi-plugin#PR-75</a>.
+     * @see <a href="https://github.com/jenkinsci/maven-hpi-plugin/pull/75">maven-hpi-plugin#PR-75</a>
      *
-     * @since TODO
+     * @since 2.158
      */
     @Exported
     public @CheckForNull String getMinimumJavaVersion() {
@@ -623,19 +768,17 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      * Disables this plugin next time Jenkins runs. As it doesn't check anything, it's recommended to use the method
      * {@link #disable(PluginDisableStrategy)}
      */
-    @Deprecated //see https://issues.jenkins-ci.org/browse/JENKINS-27177
+    @Deprecated //see https://issues.jenkins.io/browse/JENKINS-27177
     public void disable() throws IOException {
         disableWithoutCheck();
     }
 
     /**
      * Disable a plugin wihout checking any dependency. Only add the disable file.
-     * @throws IOException
      */
     private void disableWithoutCheck() throws IOException {
-        // creates an empty file
         try (OutputStream os = Files.newOutputStream(disableFile.toPath())) {
-            os.close();
+            // creates an empty file
         } catch (InvalidPathException e) {
             throw new IOException(e);
         }
@@ -646,7 +789,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      * @param strategy strategy to use
      * @return an object representing the result of the disablement of this plugin and its dependents plugins.
      */
-    public @Nonnull PluginDisableResult disable(@Nonnull PluginDisableStrategy strategy) {
+    public @NonNull PluginDisableResult disable(@NonNull PluginDisableStrategy strategy) {
         PluginDisableResult result = new PluginDisableResult(shortName);
 
         if (!this.isEnabled()) {
@@ -753,7 +896,12 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     public void setHasCycleDependency(boolean hasCycle){
         hasCycleDependency = hasCycle;
     }
-    
+
+    /**
+     * Is this plugin bundled in the WAR?
+     * Normally false as noted in {@link PluginManager#loadBundledPlugins}:
+     * this does <em>not</em> apply to “detached” plugins.
+     */
     @Exported
     public boolean isBundled() {
         return isBundled;
@@ -889,7 +1037,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     /**
      * Similar to {@code org.apache.maven.artifact.ArtifactUtils.isSnapshot}.
      */
-    static boolean isSnapshot(@Nonnull String version) {
+    static boolean isSnapshot(@NonNull String version) {
         return version.contains("-SNAPSHOT") || version.matches(".+-[0-9]{8}.[0-9]{6}-[0-9]+");
     }
 
@@ -902,7 +1050,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      *      the user may have installed a plugin locally developed.
      */
     public UpdateSite.Plugin getUpdateInfo() {
-        UpdateCenter uc = Jenkins.getInstance().getUpdateCenter();
+        UpdateCenter uc = Jenkins.get().getUpdateCenter();
         UpdateSite.Plugin p = uc.getPlugin(getShortName(), getVersionNumber());
         if(p!=null && p.isNewerThan(getVersion())) return p;
         return null;
@@ -912,10 +1060,15 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      * returns the {@link hudson.model.UpdateSite.Plugin} object, or null.
      */
     public UpdateSite.Plugin getInfo() {
-        UpdateCenter uc = Jenkins.getInstance().getUpdateCenter();
+        UpdateCenter uc = Jenkins.get().getUpdateCenter();
         UpdateSite.Plugin p = uc.getPlugin(getShortName(), getVersionNumber());
         if (p != null) return p;
         return uc.getPlugin(getShortName());
+    }
+
+    private List<UpdateSite.Plugin> getInfoFromAllSites() {
+        UpdateCenter uc = Jenkins.get().getUpdateCenter();
+        return uc.getPluginFromAllSites(getShortName(), getVersionNumber());
     }
 
     /**
@@ -947,8 +1100,54 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     }
 
     /**
+     * Same as {@link DetachedPluginsUtil#isDetachedPlugin}.
+     * @since 2.185
+     */
+    @Exported
+    public boolean isDetached() {
+        return DetachedPluginsUtil.isDetachedPlugin(shortName);
+    }
+
+    @Restricted(NoExternalUse.class)
+    public boolean hasImpliedDependents() {
+        if (!isDetached()) {
+            return false;
+        }
+        for (PluginWrapper p : Jenkins.get().getPluginManager().getPlugins()) {
+            for (Dependency dependency : DetachedPluginsUtil.getImpliedDependencies(p.shortName, p.getRequiredCoreVersion())) {
+                if (dependency.shortName.equals(shortName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get list of implied dependencies.
+     * @since 2.296
+     */
+    @Restricted(NoExternalUse.class)
+    public @NonNull Set<String> getImpliedDependents() {
+        if (!isDetached()) {
+            return Collections.emptySet();
+        }
+
+        Set<String> implied = new HashSet<>();
+        for (PluginWrapper p : Jenkins.get().getPluginManager().getPlugins()) {
+            for (Dependency dependency : DetachedPluginsUtil.getImpliedDependencies(p.shortName, p.getRequiredCoreVersion())) {
+                if (dependency.shortName.equals(shortName)) {
+                    implied.add(p.shortName);
+                }
+            }
+        }
+        return implied;
+    }
+
+    /**
      * Sort by short name.
      */
+    @Override
     public int compareTo(PluginWrapper pw) {
         return shortName.compareToIgnoreCase(pw.shortName);
     }
@@ -965,7 +1164,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
      * Where is the backup file?
      */
     public File getBackupFile() {
-        return new File(Jenkins.getInstance().getRootDir(),"plugins/"+getShortName() + ".bak");
+        return new File(Jenkins.get().getRootDir(),"plugins/"+getShortName() + ".bak");
     }
 
     /**
@@ -998,7 +1197,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     }
 
     @Extension
-    public final static PluginWrapperAdministrativeMonitor NOTICE = new PluginWrapperAdministrativeMonitor();
+    public static final PluginWrapperAdministrativeMonitor NOTICE = new PluginWrapperAdministrativeMonitor();
 
     /**
      * Administrative Monitor for failed plugins
@@ -1010,6 +1209,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
             plugins.put(plugin.shortName, plugin);
         }
 
+        @Override
         public boolean isActivated() {
             return !plugins.isEmpty();
         }
@@ -1141,14 +1341,14 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
 //
     @RequirePOST
     public HttpResponse doMakeEnabled() throws IOException {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         enable();
         return HttpResponses.ok();
     }
 
     @RequirePOST
     public HttpResponse doMakeDisabled() throws IOException {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         disable();
         return HttpResponses.ok();
     }
@@ -1156,7 +1356,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     @RequirePOST
     @Deprecated
     public HttpResponse doPin() throws IOException {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         // See https://groups.google.com/d/msg/jenkinsci-dev/kRobm-cxFw8/6V66uhibAwAJ
         LOGGER.log(WARNING, "Call to pin plugin has been ignored. Plugin name: " + shortName);
         return HttpResponses.ok();
@@ -1165,7 +1365,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
     @RequirePOST
     @Deprecated
     public HttpResponse doUnpin() throws IOException {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         // See https://groups.google.com/d/msg/jenkinsci-dev/kRobm-cxFw8/6V66uhibAwAJ
         LOGGER.log(WARNING, "Call to unpin plugin has been ignored. Plugin name: " + shortName);
         return HttpResponses.ok();
@@ -1173,7 +1373,7 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
 
     @RequirePOST
     public HttpResponse doDoUninstall() throws IOException {
-        Jenkins jenkins = Jenkins.getActiveInstance();
+        Jenkins jenkins = Jenkins.get();
         
         jenkins.checkPermission(Jenkins.ADMINISTER);
         archive.delete();
@@ -1184,6 +1384,30 @@ public class PluginWrapper implements Comparable<PluginWrapper>, ModelObject {
         return HttpResponses.redirectViaContextPath("/pluginManager/installed");   // send back to plugin manager
     }
 
+    @Restricted(DoNotUse.class) // Jelly
+    public List<UpdateSite.Warning> getActiveWarnings() {
+        return ExtensionList.lookupSingleton(UpdateSiteWarningsMonitor.class).getActivePluginWarningsByPlugin().getOrDefault(this, Collections.emptyList());
+    }
+
+    @Restricted(NoExternalUse.class)
+    public List<UpdateSite.Deprecation> getDeprecations() {
+        /* Would be much nicer to go through getInfoFromAllSites but that only works for currently published plugins */
+        List<UpdateSite.Deprecation> deprecations = new ArrayList<>();
+        final UpdateCenter updateCenter = Jenkins.get().getUpdateCenter();
+        if (updateCenter.isSiteDataReady()) {
+            for (UpdateSite site : updateCenter.getSites()) {
+                final UpdateSite.Data data = site.getData();
+                if (data != null) {
+                    for (Map.Entry<String, UpdateSite.Deprecation> entry : data.getDeprecations().entrySet()) {
+                        if (entry.getKey().equals(this.shortName)) {
+                            deprecations.add(entry.getValue());
+                        }
+                    }
+                }
+            }
+        }
+        return deprecations;
+    }
 
     private static final Logger LOGGER = Logger.getLogger(PluginWrapper.class.getName());
 

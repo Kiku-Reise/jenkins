@@ -1,13 +1,11 @@
 package jenkins.security;
 
+import edu.umd.cs.findbugs.annotations.Nullable;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
 import hudson.remoting.Channel;
 import hudson.remoting.ChannelBuilder;
 import hudson.slaves.SlaveComputer;
-import jenkins.model.Jenkins;
-
-import javax.annotation.Nullable;
 
 /**
  * Intercepts the new creation of {@link Channel} and tweak its configuration.
@@ -39,6 +37,6 @@ public abstract class ChannelConfigurator implements ExtensionPoint {
      * All the registered {@link ChannelConfigurator}s.
      */
     public static ExtensionList<ChannelConfigurator> all() {
-        return Jenkins.getInstance().getExtensionList(ChannelConfigurator.class);
+        return ExtensionList.lookup(ChannelConfigurator.class);
     }
 }

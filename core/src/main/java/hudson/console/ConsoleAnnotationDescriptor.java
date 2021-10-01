@@ -26,15 +26,14 @@ package hudson.console;
 import hudson.DescriptorExtensionList;
 import hudson.ExtensionPoint;
 import hudson.model.Descriptor;
-import jenkins.model.Jenkins;
+import java.io.IOException;
+import java.net.URL;
 import java.util.concurrent.TimeUnit;
+import javax.servlet.ServletException;
+import jenkins.model.Jenkins;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.WebMethod;
-
-import javax.servlet.ServletException;
-import java.io.IOException;
-import java.net.URL;
 
 /**
  * Descriptor for {@link ConsoleNote}.
@@ -92,6 +91,6 @@ public abstract class ConsoleAnnotationDescriptor extends Descriptor<ConsoleNote
      * Returns all the registered {@link ConsoleAnnotationDescriptor} descriptors.
      */
     public static DescriptorExtensionList<ConsoleNote<?>,ConsoleAnnotationDescriptor> all() {
-        return (DescriptorExtensionList) Jenkins.getInstance().getDescriptorList(ConsoleNote.class);
+        return (DescriptorExtensionList) Jenkins.get().getDescriptorList(ConsoleNote.class);
     }
 }

@@ -24,7 +24,7 @@
 package hudson.model;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 
 import org.junit.Test;
 
@@ -40,13 +40,13 @@ public class DisplayNameListenerTest {
         dest.setDisplayName("this should be cleared");
         
         // make sure the displayname and the name are different at this point
-        assertFalse(dest.getName().equals(dest.getDisplayName()));
+        assertNotEquals(dest.getName(), dest.getDisplayName());
         
         listener.onCopied(src, dest);
         // make sure the displayname is equals to the name as it should be null
         assertEquals(dest.getName(), dest.getDisplayName());
     }
-    
+
     @Test
     public void testOnRenamedOldNameEqualsDisplayName() throws Exception {
         DisplayNameListener listener = new DisplayNameListener();

@@ -23,6 +23,14 @@
  */
 package hudson.model;
 
+import static hudson.model.queue.Executables.getParentOf;
+import static java.util.logging.Level.FINE;
+import static java.util.logging.Level.FINER;
+import static java.util.logging.Level.SEVERE;
+import static java.util.logging.Level.WARNING;
+
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.FilePath;
 import hudson.Functions;
 import hudson.Util;
@@ -30,51 +38,48 @@ import hudson.model.Queue.Executable;
 import hudson.model.queue.SubTask;
 import hudson.model.queue.WorkUnit;
 import hudson.security.ACL;
+import hudson.security.ACLContext;
+import hudson.security.AccessControlled;
 import hudson.util.InterceptingProxy;
-import java.util.concurrent.TimeUnit;
-import jenkins.model.CauseOfInterruption;
-import jenkins.model.CauseOfInterruption.UserInterruption;
-import jenkins.model.InterruptedBuildAction;
-import jenkins.model.Jenkins;
-import org.acegisecurity.Authentication;
-import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.HttpResponses;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.export.ExportedBean;
-import org.kohsuke.stapler.interceptor.RequirePOST;
-
-import javax.annotation.concurrent.GuardedBy;
-import javax.servlet.ServletException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static hudson.model.queue.Executables.*;
-import hudson.security.ACLContext;
-import hudson.security.AccessControlled;
-import java.util.Collection;
-import static java.util.logging.Level.*;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
+import java.util.stream.Collectors;
+import javax.servlet.ServletException;
+import jenkins.model.CauseOfInterruption;
+import jenkins.model.CauseOfInterruption.UserInterruption;
+import jenkins.model.InterruptedBuildAction;
+import jenkins.model.Jenkins;
 import jenkins.model.queue.AsynchronousExecution;
 import jenkins.security.QueueItemAuthenticatorConfiguration;
 import jenkins.security.QueueItemAuthenticatorDescriptor;
+import net.jcip.annotations.GuardedBy;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.DoNotUse;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
-
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.HttpResponses;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
+import org.kohsuke.stapler.interceptor.RequirePOST;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 
 /**
  * Thread that executes builds.
@@ -84,7 +89,7 @@ import org.kohsuke.accmod.restrictions.NoExternalUse;
  */
 @ExportedBean
 public class Executor extends Thread implements ModelObject {
-    protected final @Nonnull Computer owner;
+    protected final @NonNull Computer owner;
     private final Queue queue;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private static final int DEFAULT_ESTIMATED_DURATION = -1;
@@ -139,9 +144,9 @@ public class Executor extends Thread implements ModelObject {
      * Cause of interruption. Access needs to be synchronized.
      */
     @GuardedBy("lock")
-    private final List<CauseOfInterruption> causes = new Vector<CauseOfInterruption>();
+    private final List<CauseOfInterruption> causes = new Vector<>();
 
-    public Executor(@Nonnull Computer owner, int n) {
+    public Executor(@NonNull Computer owner, int n) {
         super("Executor #"+n+" for "+owner.getDisplayName());
         this.owner = owner;
         this.queue = Jenkins.get().getQueue();
@@ -194,8 +199,8 @@ public class Executor extends Thread implements ModelObject {
     }
 
     private void interrupt(Result result, boolean forShutdown) {
-        Authentication a = Jenkins.getAuthentication();
-        if (a == ACL.SYSTEM)
+        Authentication a = Jenkins.getAuthentication2();
+        if (a.equals(ACL.SYSTEM2))
             interrupt(result, forShutdown, new CauseOfInterruption[0]);
         else {
             // worth recording who did it
@@ -213,7 +218,7 @@ public class Executor extends Thread implements ModelObject {
 
     private void interrupt(Result result, boolean forShutdown, CauseOfInterruption... causes) {
         if (LOGGER.isLoggable(FINE))
-            LOGGER.log(FINE, String.format("%s is interrupted(%s): %s", getDisplayName(), result, Util.join(Arrays.asList(causes),",")), new InterruptedException());
+            LOGGER.log(FINE, String.format("%s is interrupted(%s): %s", getDisplayName(), result, Arrays.stream(causes).map(Object::toString).collect(Collectors.joining(","))), new InterruptedException());
 
         lock.writeLock().lock();
         try {
@@ -271,7 +276,7 @@ public class Executor extends Thread implements ModelObject {
         lock.writeLock().lock();
         try {
             if (causes.isEmpty())   return;
-            r = new ArrayList<CauseOfInterruption>(causes);
+            r = new ArrayList<>(causes);
             causes.clear();
         } finally {
             lock.writeLock().unlock();
@@ -338,13 +343,11 @@ public class Executor extends Thread implements ModelObject {
             lock.writeLock().unlock();
         }
 
-        ACL.impersonate(ACL.SYSTEM);
-
-        try {
+        try (ACLContext ctx = ACL.as2(ACL.SYSTEM2)) {
             SubTask task;
             // transition from idle to building.
             // perform this state change as an atomic operation wrt other queue operations
-            task = Queue.withLock(new java.util.concurrent.Callable<SubTask>() {
+            task = Queue.withLock(new Callable<SubTask>() {
                 @Override
                 public SubTask call() throws Exception {
                     if (!owner.isOnline()) {
@@ -413,10 +416,10 @@ public class Executor extends Thread implements ModelObject {
                     }
                 }
 
-                setName(getName() + " : executing " + executable.toString());
-                Authentication auth = workUnit.context.item.authenticate();
+                setName(getName() + " : executing " + executable);
+                Authentication auth = workUnit.context.item.authenticate2();
                 LOGGER.log(FINE, "{0} is now executing {1} as {2}", new Object[] {getName(), executable, auth});
-                if (LOGGER.isLoggable(FINE) && auth.equals(ACL.SYSTEM)) { // i.e., unspecified
+                if (LOGGER.isLoggable(FINE) && auth.equals(ACL.SYSTEM2)) { // i.e., unspecified
                     if (QueueItemAuthenticatorDescriptor.all().isEmpty()) {
                         LOGGER.fine("no QueueItemAuthenticator implementations installed");
                     } else if (QueueItemAuthenticatorConfiguration.get().getAuthenticators().isEmpty()) {
@@ -425,7 +428,7 @@ public class Executor extends Thread implements ModelObject {
                         LOGGER.log(FINE, "some QueueItemAuthenticator implementations configured but neglected to authenticate {0}", executable);
                     }
                 }
-                try (ACLContext context = ACL.as(auth)) {
+                try (ACLContext context = ACL.as2(auth)) {
                     queue.execute(executable, task);
                 }
             } catch (AsynchronousExecution x) {
@@ -535,7 +538,7 @@ public class Executor extends Thread implements ModelObject {
      * @return Unmodifiable collection of causes of interruption.
      * @since  1.617    
      */
-    public @Nonnull Collection<CauseOfInterruption> getCausesOfInterruption() {
+    public @NonNull Collection<CauseOfInterruption> getCausesOfInterruption() {
         return Collections.unmodifiableCollection(causes);
     }
 
@@ -580,6 +583,7 @@ public class Executor extends Thread implements ModelObject {
     /**
      * Human readable name of the Jenkins executor. For the Java thread name use {@link #getName()}.
      */
+    @Override
     public String getDisplayName() {
         return "Executor #"+getNumber();
     }
@@ -767,7 +771,7 @@ public class Executor extends Thread implements ModelObject {
      *      string like "3 minutes" "1 day" etc.
      */
     public String getTimestampString() {
-        return Util.getPastTimeString(getElapsedTime());
+        return Util.getTimeSpanString(getElapsedTime());
     }
 
     /**
@@ -830,7 +834,7 @@ public class Executor extends Thread implements ModelObject {
 
     /**
      * @deprecated as of 1.489
-     *      Use {@link #doStop()}.
+     *      Use {@link #doStop()} or {@link #doStopBuild(String)}.
      */
     @RequirePOST
     @Deprecated
@@ -839,17 +843,46 @@ public class Executor extends Thread implements ModelObject {
     }
 
     /**
-     * Stops the current build.
+     * Stops the current build.<br>
+     * You can use {@link #doStopBuild(String)} instead to ensure what will be
+     * interrupted is actually what you want to interrupt.
      *
      * @since 1.489
+     * @see #doStopBuild(String)
      */
     @RequirePOST
     public HttpResponse doStop() {
+        return doStopBuild(null);
+    }
+
+    /**
+     * Stops the current build, if matching the specified external id
+     * (or no id is specified, or the current {@link Executable} is not a {@link Run}).
+     *
+     * @param runExtId
+     *      if not null, the externalizable id ({@link Run#getExternalizableId()})
+     *      of the build the user expects to interrupt
+     * @since 2.209
+     */
+    @RequirePOST
+    @Restricted(NoExternalUse.class)
+    public HttpResponse doStopBuild(@CheckForNull @QueryParameter(fixEmpty = true) String runExtId) {
         lock.writeLock().lock(); // need write lock as interrupt will change the field
         try {
             if (executable != null) {
-                getParentOf(executable).getOwnerTask().checkAbortPermission();
-                interrupt();
+                if (runExtId == null || runExtId.isEmpty() || ! (executable instanceof Run)
+                        || (runExtId.equals(((Run<?,?>) executable).getExternalizableId()))) {
+                    final Queue.Task ownerTask = getParentOf(executable).getOwnerTask();
+                    boolean canAbort = ownerTask.hasAbortPermission();
+                    if (canAbort && ownerTask instanceof AccessControlled) {
+                        if (!((AccessControlled) ownerTask).hasPermission(Item.READ)) {
+                            // pretend the build does not exist
+                            return HttpResponses.forwardToPreviousPage();
+                        }
+                    }
+                    ownerTask.checkAbortPermission();
+                    interrupt();
+                }
             }
         } finally {
             lock.writeLock().unlock();
@@ -872,12 +905,18 @@ public class Executor extends Thread implements ModelObject {
         lock.readLock().lock();
         try {
             return executable != null && getParentOf(executable).getOwnerTask().hasAbortPermission();
+        } catch(Exception ex) {
+            if (!(ex instanceof AccessDeniedException)) {
+                // Prevents UI from exploding in the case of unexpected runtime exceptions
+                LOGGER.log(WARNING, "Unhandled exception", ex);
+            }
+            return false;
         } finally {
             lock.readLock().unlock();
         }
     }
 
-    public @Nonnull Computer getOwner() {
+    public @NonNull Computer getOwner() {
         return owner;
     }
 
@@ -905,6 +944,7 @@ public class Executor extends Thread implements ModelObject {
      */
     public <T> T newImpersonatingProxy(Class<T> type, T core) {
         return new InterceptingProxy() {
+            @Override
             protected Object call(Object o, Method m, Object[] args) throws Throwable {
                 final Executor old = IMPERSONATION.get();
                 IMPERSONATION.set(Executor.this);
@@ -961,7 +1001,7 @@ public class Executor extends Thread implements ModelObject {
      * Mechanism to allow threads (in particular the channel request handling threads) to
      * run on behalf of {@link Executor}.
      */
-    private static final ThreadLocal<Executor> IMPERSONATION = new ThreadLocal<Executor>();
+    private static final ThreadLocal<Executor> IMPERSONATION = new ThreadLocal<>();
 
     private static final Logger LOGGER = Logger.getLogger(Executor.class.getName());
 }

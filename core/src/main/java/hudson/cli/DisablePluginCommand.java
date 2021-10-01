@@ -27,12 +27,11 @@ package hudson.cli;
 import hudson.Extension;
 import hudson.PluginWrapper;
 import hudson.lifecycle.RestartNotSupportedException;
+import java.io.PrintStream;
+import java.util.List;
 import jenkins.model.Jenkins;
 import org.kohsuke.args4j.Argument;
 import org.kohsuke.args4j.Option;
-
-import java.io.PrintStream;
-import java.util.List;
 
 /**
  * Disable one or more installed plugins.
@@ -164,7 +163,7 @@ public class DisablePluginCommand extends CLICommand {
 
     /**
      * Restart if this particular result of the disablement of a plugin and its dependent plugins (depending on the
-     * strategy used) has a plugin disablexd.
+     * strategy used) has a plugin disabled.
      * @param oneResult the result of a plugin (and its dependents).
      * @return true if it end up in restarting jenkins.
      */
@@ -220,15 +219,15 @@ public class DisablePluginCommand extends CLICommand {
                 break;
             case NO_SUCH_PLUGIN:
                 returnCode = RETURN_CODE_NO_SUCH_PLUGIN;
-        }
-
-        if (returnCode == 0) {
-            for (PluginWrapper.PluginDisableResult oneDependentResult : result.getDependentsDisableStatus()) {
-                returnCode = getResultCode(oneDependentResult);
-                if (returnCode != 0) {
-                    break;
+                break; 
+            default:
+                for (PluginWrapper.PluginDisableResult oneDependentResult : result.getDependentsDisableStatus()) {
+                    returnCode = getResultCode(oneDependentResult);
+                    if (returnCode != 0) {
+                        break;
+                    }
                 }
-            }
+                break;
         }
 
         return returnCode;

@@ -26,10 +26,6 @@ package hudson.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.thoughtworks.xstream.XStream;
-import com.thoughtworks.xstream.io.xml.KXml2Driver;
-import com.thoughtworks.xstream.mapper.AnnotationMapper;
-import com.thoughtworks.xstream.mapper.Mapper;
-import com.thoughtworks.xstream.mapper.MapperWrapper;
 import com.thoughtworks.xstream.converters.ConversionException;
 import com.thoughtworks.xstream.converters.Converter;
 import com.thoughtworks.xstream.converters.ConverterMatcher;
@@ -39,38 +35,41 @@ import com.thoughtworks.xstream.converters.SingleValueConverter;
 import com.thoughtworks.xstream.converters.SingleValueConverterWrapper;
 import com.thoughtworks.xstream.converters.UnmarshallingContext;
 import com.thoughtworks.xstream.converters.extended.DynamicProxyConverter;
+import com.thoughtworks.xstream.core.ClassLoaderReference;
 import com.thoughtworks.xstream.core.JVM;
 import com.thoughtworks.xstream.core.util.Fields;
 import com.thoughtworks.xstream.io.HierarchicalStreamDriver;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
 import com.thoughtworks.xstream.io.ReaderWrapper;
+import com.thoughtworks.xstream.io.xml.KXml2Driver;
 import com.thoughtworks.xstream.mapper.CannotResolveClassException;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import com.thoughtworks.xstream.mapper.Mapper;
+import com.thoughtworks.xstream.mapper.MapperWrapper;
+import com.thoughtworks.xstream.security.AnyTypePermission;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.PluginManager;
 import hudson.PluginWrapper;
 import hudson.XmlFile;
 import hudson.diagnosis.OldDataMonitor;
-import hudson.remoting.ClassFilter;
-import hudson.util.xstream.ImmutableSetConverter;
-import hudson.util.xstream.ImmutableSortedSetConverter;
-import jenkins.util.xstream.SafeURLConverter;
-import jenkins.model.Jenkins;
 import hudson.model.Label;
 import hudson.model.Result;
 import hudson.model.Saveable;
+import hudson.remoting.ClassFilter;
 import hudson.util.xstream.ImmutableListConverter;
 import hudson.util.xstream.ImmutableMapConverter;
+import hudson.util.xstream.ImmutableSetConverter;
+import hudson.util.xstream.ImmutableSortedSetConverter;
 import hudson.util.xstream.MapperDelegate;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -78,21 +77,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
+import jenkins.model.Jenkins;
+import jenkins.util.xstream.SafeURLConverter;
 
 /**
- * {@link XStream} enhanced for additional Java5 support and improved robustness.
- * @author Kohsuke Kawaguchi
+ * {@link XStream} customized in various ways for Jenkins’ needs.
+ * Most importantly, integrates {@link RobustReflectionConverter}.
  */
 public class XStream2 extends XStream {
 
     private static final Logger LOGGER = Logger.getLogger(XStream2.class.getName());
 
     private RobustReflectionConverter reflectionConverter;
-    private final ThreadLocal<Boolean> oldData = new ThreadLocal<Boolean>();
+    private final ThreadLocal<Boolean> oldData = new ThreadLocal<>();
     private final @CheckForNull ClassOwnership classOwnership;
-    private final Map<String,Class<?>> compatibilityAliases = new ConcurrentHashMap<String, Class<?>>();
+    private final Map<String,Class<?>> compatibilityAliases = new ConcurrentHashMap<>();
 
     /**
      * Hook to insert {@link Mapper}s after they are created.
@@ -141,11 +140,11 @@ public class XStream2 extends XStream {
      * Even for primitive-valued fields, it is useful to guarantee
      * that unmarshaling will produce the same result as creating a new instance.
      * <p>Do <em>not</em> use in cases where the root objects defines fields (typically {@code final})
-     * which it expects to be {@link Nonnull} unless you are prepared to restore default values for those fields.
+     * which it expects to be {@link NonNull} unless you are prepared to restore default values for those fields.
      * @param nullOut whether to perform this special behavior;
      *                false to use the stock XStream behavior of leaving unmentioned {@code root} fields untouched
      * @see XmlFile#unmarshalNullingOut
-     * @see <a href="https://issues.jenkins-ci.org/browse/JENKINS-21017">JENKINS-21017</a>
+     * @see <a href="https://issues.jenkins.io/browse/JENKINS-21017">JENKINS-21017</a>
      * @since 2.99
      */
     public Object unmarshal(HierarchicalStreamReader reader, Object root, DataHolder dataHolder, boolean nullOut) {
@@ -212,10 +211,11 @@ public class XStream2 extends XStream {
     }
 
     @Override
-    protected Converter createDefaultConverter() {
+    protected void setupConverters() {
+        super.setupConverters();
         // replace default reflection converter
-        reflectionConverter = new RobustReflectionConverter(getMapper(),new JVM().bestReflectionProvider(), new PluginClassOwnership());
-        return reflectionConverter;
+        reflectionConverter = new RobustReflectionConverter(getMapper(), JVM.newReflectionProvider(), new PluginClassOwnership());
+        registerConverter(reflectionConverter, PRIORITY_VERY_LOW + 1);
     }
 
     /**
@@ -235,7 +235,7 @@ public class XStream2 extends XStream {
 
     private void init() {
         // list up types that should be marshalled out like a value, without referential integrity tracking.
-        addImmutableType(Result.class);
+        addImmutableType(Result.class, false);
 
         // http://www.openwall.com/lists/oss-security/2017/04/03/4
         denyTypes(new Class[] { void.class, Void.class });
@@ -257,8 +257,9 @@ public class XStream2 extends XStream {
         registerConverter(new AssociatedConverterImpl(this), -10);
 
         registerConverter(new BlacklistedTypesConverter(), PRIORITY_VERY_HIGH); // SECURITY-247 defense
+        addPermission(AnyTypePermission.ANY); // covered by JEP-200, avoid securityWarningGiven
 
-        registerConverter(new DynamicProxyConverter(getMapper()) { // SECURITY-105 defense
+        registerConverter(new DynamicProxyConverter(getMapper(), new ClassLoaderReference(getClassLoader())) { // SECURITY-105 defense
             @Override public boolean canConvert(Class type) {
                 return /* this precedes NullConverter */ type != null && super.canConvert(type);
             }
@@ -281,11 +282,8 @@ public class XStream2 extends XStream {
                     return super.serializedClass(type);
             }
         });
-        AnnotationMapper a = new AnnotationMapper(m, getConverterRegistry(), getConverterLookup(), getClassLoader(), getReflectionProvider(), getJvm());
-        // TODO JENKINS-19561 this is unsafe:
-        a.autodetectAnnotations(true);
 
-        mapperInjectionPoint = new MapperInjectionPoint(a);
+        mapperInjectionPoint = new MapperInjectionPoint(m);
 
         return mapperInjectionPoint;
     }
@@ -308,7 +306,7 @@ public class XStream2 extends XStream {
      * @since 1.504
      */
     public void toXMLUTF8(Object obj, OutputStream out) throws IOException {
-        Writer w = new OutputStreamWriter(out, Charset.forName("UTF-8"));
+        Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8);
         w.write("<?xml version=\"1.1\" encoding=\"UTF-8\"?>\n");
         toXML(obj, w);
     }
@@ -327,8 +325,8 @@ public class XStream2 extends XStream {
         mapperInjectionPoint.setDelegate(m);
     }
 
-    final class MapperInjectionPoint extends MapperDelegate {
-        public MapperInjectionPoint(Mapper wrapped) {
+    static final class MapperInjectionPoint extends MapperDelegate {
+        MapperInjectionPoint(Mapper wrapped) {
             super(wrapped);
         }
 
@@ -361,8 +359,8 @@ public class XStream2 extends XStream {
     /**
      * Prior to Hudson 1.106, XStream 1.1.x was used which encoded "$" in class names
      * as "-" instead of "_-" that is used now.  Up through Hudson 1.348 compatibility
-     * for old serialized data was maintained via {@code XStream11XmlFriendlyMapper}.
-     * However, it was found (HUDSON-5768) that this caused fields with "__" to fail
+     * for old serialized data was maintained via {@link com.thoughtworks.xstream.mapper.XStream11XmlFriendlyMapper}.
+     * However, it was found (JENKINS-5768) that this caused fields with "__" to fail
      * deserialization due to double decoding.  Now this class is used for compatibility.
      */
     private class CompatibilityMapper extends MapperWrapper {
@@ -397,7 +395,7 @@ public class XStream2 extends XStream {
     private static final class AssociatedConverterImpl implements Converter {
         private final XStream xstream;
         private final ConcurrentHashMap<Class<?>,Converter> cache =
-                new ConcurrentHashMap<Class<?>,Converter>();
+                new ConcurrentHashMap<>();
 
         private AssociatedConverterImpl(XStream xstream) {
             this.xstream = xstream;
@@ -445,25 +443,24 @@ public class XStream2 extends XStream {
                 IllegalAccessError x = new IllegalAccessError();
                 x.initCause(e);
                 throw x;
-            } catch (InstantiationException e) {
-                InstantiationError x = new InstantiationError();
-                x.initCause(e);
-                throw x;
-            } catch (InvocationTargetException e) {
+            } catch (InstantiationException | InvocationTargetException e) {
                 InstantiationError x = new InstantiationError();
                 x.initCause(e);
                 throw x;
             }
         }
 
+        @Override
         public boolean canConvert(Class type) {
             return findConverter(type)!=null;
         }
 
+        @Override
         public void marshal(Object source, HierarchicalStreamWriter writer, MarshallingContext context) {
             findConverter(source.getClass()).marshal(source,writer,context);
         }
 
+        @Override
         public Object unmarshal(HierarchicalStreamReader reader, UnmarshallingContext context) {
             return findConverter(context.getRequiredType()).unmarshal(reader,context);
         }
@@ -478,22 +475,25 @@ public class XStream2 extends XStream {
      *     ...
      * </pre>
      */
-    public static abstract class PassthruConverter<T> implements Converter {
+    public abstract static class PassthruConverter<T> implements Converter {
         private Converter converter;
 
         public PassthruConverter(XStream2 xstream) {
             converter = xstream.reflectionConverter;
         }
 
+        @Override
         public boolean canConvert(Class type) {
             // marshal/unmarshal called directly from AssociatedConverterImpl
             return false;
         }
 
+        @Override
         public void marshal(Object source, HierarchicalStreamWriter writer, MarshallingContext context) {
             converter.marshal(source, writer, context);
         }
 
+        @Override
         public Object unmarshal(HierarchicalStreamReader reader, UnmarshallingContext context) {
             Object obj = converter.unmarshal(reader, context);
             callback((T)obj, context);
@@ -519,7 +519,6 @@ public class XStream2 extends XStream {
 
         private PluginManager pm;
 
-        @SuppressFBWarnings("NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE") // classOwnership checked for null so why does FB complain?
         @Override public String ownerOf(Class<?> clazz) {
             if (classOwnership != null) {
                 return classOwnership.ownerOf(clazz);
@@ -543,12 +542,12 @@ public class XStream2 extends XStream {
     private static class BlacklistedTypesConverter implements Converter {
         @Override
         public void marshal(Object source, HierarchicalStreamWriter writer, MarshallingContext context) {
-            throw new UnsupportedOperationException("Refusing to marshal " + source.getClass().getName() + " for security reasons; see https://jenkins.io/redirect/class-filter/");
+            throw new UnsupportedOperationException("Refusing to marshal " + source.getClass().getName() + " for security reasons; see https://www.jenkins.io/redirect/class-filter/");
         }
 
         @Override
         public Object unmarshal(HierarchicalStreamReader reader, UnmarshallingContext context) {
-            throw new ConversionException("Refusing to unmarshal " + reader.getNodeName() + " for security reasons; see https://jenkins.io/redirect/class-filter/");
+            throw new ConversionException("Refusing to unmarshal " + reader.getNodeName() + " for security reasons; see https://www.jenkins.io/redirect/class-filter/");
         }
 
         /** TODO see comment in {@code whitelisted-classes.txt} */

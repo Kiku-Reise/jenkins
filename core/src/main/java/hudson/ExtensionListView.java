@@ -24,13 +24,12 @@
 package hudson;
 
 import hudson.tasks.UserNameResolver;
-import jenkins.model.Jenkins;
 import hudson.util.CopyOnWriteList;
-
 import java.util.AbstractList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Collection;
+import jenkins.model.Jenkins;
 
 /**
  * Compatibility layer for legacy manual registration of extension points.
@@ -58,7 +57,7 @@ public class ExtensionListView {
     public static <T> List<T> createList(final Class<T> type) {
         return new AbstractList<T>() {
             private ExtensionList<T> storage() {
-                return Jenkins.getInstance().getExtensionList(type);
+                return Jenkins.get().getExtensionList(type);
             }
 
             @Override
@@ -66,10 +65,12 @@ public class ExtensionListView {
                 return storage().iterator();
             }
 
+            @Override
             public T get(int index) {
                 return storage().get(index);
             }
 
+            @Override
             public int size() {
                 return storage().size();
             }
@@ -103,7 +104,7 @@ public class ExtensionListView {
     public static <T> CopyOnWriteList<T> createCopyOnWriteList(final Class<T> type) {
         return new CopyOnWriteList<T>() {
             private ExtensionList<T> storage() {
-                return Jenkins.getInstance().getExtensionList(type);
+                return Jenkins.get().getExtensionList(type);
             }
 
             @Override
@@ -142,7 +143,7 @@ public class ExtensionListView {
             }
 
             @Override
-            public <T> T[] toArray(T[] array) {
+            public <X> X[] toArray(X[] array) {
                 return storage().toArray(array);
             }
 

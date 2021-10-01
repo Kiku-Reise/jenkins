@@ -1,5 +1,8 @@
 package jenkins.security;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
 import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
 import com.gargoylesoftware.htmlunit.Page;
 import com.gargoylesoftware.htmlunit.WebRequest;
@@ -7,7 +10,10 @@ import hudson.ExtensionList;
 import hudson.model.UnprotectedRootAction;
 import hudson.model.User;
 import hudson.util.HttpResponses;
-import jenkins.security.apitoken.ApiTokenPropertyConfiguration;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import jenkins.security.apitoken.ApiTokenTestHelper;
 import org.junit.Before;
 import org.junit.Rule;
@@ -17,13 +23,6 @@ import org.jvnet.hudson.test.JenkinsRule.WebClient;
 import org.jvnet.hudson.test.TestExtension;
 import org.kohsuke.stapler.HttpResponse;
 import org.xml.sax.SAXException;
-
-import java.io.IOException;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-
-import static org.junit.Assert.*;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -38,8 +37,7 @@ public class BasicHeaderProcessorTest {
 
     @Before
     public void prepareListeners(){
-        //TODO simplify using #3021 into ExtensionList.lookupSingleton(SpySecurityListener.class)
-        this.spySecurityListener = ExtensionList.lookup(SecurityListener.class).get(SpySecurityListenerImpl.class);
+        this.spySecurityListener = ExtensionList.lookupSingleton(SpySecurityListener.class);
     }
 
     /**
@@ -119,7 +117,7 @@ public class BasicHeaderProcessorTest {
         ApiTokenTestHelper.enableLegacyBehavior();
         
         j.jenkins.setSecurityRealm(j.createDummySecurityRealm());
-        User foo = User.get("foo");
+        User foo = User.getOrCreateByIdOrFullName("foo");
         wc = j.createWebClient();
 
         String[] basicCandidates = {"Basic", "BASIC", "basic", "bASIC"};
@@ -156,7 +154,7 @@ public class BasicHeaderProcessorTest {
         return prefix + " " + Base64.getEncoder().encodeToString(userAndPass.getBytes(StandardCharsets.UTF_8));
     }
 
-    private void makeRequestWithAuthCodeAndVerify(String authCode, String expectedLogin) throws IOException, SAXException {
+    private void makeRequestWithAuthCodeAndVerify(String authCode, String expectedLogin) throws IOException {
         WebRequest req = new WebRequest(new URL(j.getURL(),"test"));
         req.setEncodingType(null);
         if (authCode!=null)

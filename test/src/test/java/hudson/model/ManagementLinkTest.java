@@ -23,20 +23,19 @@
  */
 package hudson.model;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.gargoylesoftware.htmlunit.html.DomNodeUtil;
 import com.gargoylesoftware.htmlunit.html.HtmlAnchor;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.JenkinsRule.WebClient;
 import org.jvnet.hudson.test.TestExtension;
-
-import java.util.List;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -55,7 +54,7 @@ public class ManagementLinkTest {
 
         for (int i=0; ; i++) {
             HtmlPage page = wc.goTo("manage");
-            List<?> anchors = DomNodeUtil.selectNodes(page, "//div[@class='manage-option']/a[not(@onclick)]");
+            List<?> anchors = DomNodeUtil.selectNodes(page, "//div[contains(@class,'jenkins-section__item')]/a[not(@onclick)]");
             assertTrue(anchors.size()>=8);
             if (i==anchors.size())  return; // done
 
@@ -65,7 +64,7 @@ public class ManagementLinkTest {
 
     @Test @Issue("JENKINS-33683")
     public void invisibleLinks() throws Exception {
-        assertEquals(null, j.jenkins.getDynamic("and_fail_trying"));
+        assertNull(j.jenkins.getDynamic("and_fail_trying"));
     }
 
     @TestExtension // Intentionally hooked in all tests

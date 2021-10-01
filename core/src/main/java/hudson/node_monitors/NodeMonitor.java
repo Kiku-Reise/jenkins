@@ -23,21 +23,19 @@
  */
 package hudson.node_monitors;
 
-import hudson.ExtensionPoint;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.DescriptorExtensionList;
 import hudson.Extension;
-import hudson.tasks.Publisher;
+import hudson.ExtensionPoint;
 import hudson.model.Computer;
 import hudson.model.ComputerSet;
 import hudson.model.Describable;
-import hudson.model.Node;
-import jenkins.model.Jenkins;
 import hudson.model.Descriptor;
+import hudson.model.Node;
+import hudson.tasks.Publisher;
 import hudson.util.DescriptorList;
-
 import java.util.List;
-import javax.annotation.CheckForNull;
-
+import jenkins.model.Jenkins;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
 
@@ -80,8 +78,9 @@ public abstract class NodeMonitor implements ExtensionPoint, Describable<NodeMon
         return getDescriptor().getDisplayName();
     }
 
+    @Override
     public AbstractNodeMonitorDescriptor<?> getDescriptor() {
-        return (AbstractNodeMonitorDescriptor<?>) Jenkins.getInstance().getDescriptorOrDie(getClass());
+        return (AbstractNodeMonitorDescriptor<?>) Jenkins.get().getDescriptorOrDie(getClass());
     }
 
     /**
@@ -140,12 +139,12 @@ public abstract class NodeMonitor implements ExtensionPoint, Describable<NodeMon
      *      Use {@link #all()} for read access and {@link Extension} for registration.
      */
     @Deprecated
-    public static final DescriptorList<NodeMonitor> LIST = new DescriptorList<NodeMonitor>(NodeMonitor.class);
+    public static final DescriptorList<NodeMonitor> LIST = new DescriptorList<>(NodeMonitor.class);
 
     /**
      * Returns all the registered {@link NodeMonitor} descriptors.
      */
     public static DescriptorExtensionList<NodeMonitor,Descriptor<NodeMonitor>> all() {
-        return Jenkins.getInstance().<NodeMonitor,Descriptor<NodeMonitor>>getDescriptorList(NodeMonitor.class);
+        return Jenkins.get().getDescriptorList(NodeMonitor.class);
     }
 }

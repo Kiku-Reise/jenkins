@@ -16,13 +16,14 @@ public class CompoundEnumeration<T> implements Enumeration<T> {
     private Enumeration<? extends T> cur;
 
     public CompoundEnumeration(Enumeration... e) {
-        this((Iterable)Arrays.asList(e));
+        this(Arrays.asList(e));
     }
 
     public CompoundEnumeration(Iterable<Enumeration<? extends T>> e) {
         this.base = e.iterator();
     }
 
+    @Override
     public boolean hasMoreElements() {
         while (!cur.hasMoreElements() && base.hasNext()) {
             cur = base.next();
@@ -30,8 +31,8 @@ public class CompoundEnumeration<T> implements Enumeration<T> {
         return cur.hasMoreElements();
     }
 
+    @Override
     public T nextElement() throws NoSuchElementException {
         return cur.nextElement();
     }
 }
-

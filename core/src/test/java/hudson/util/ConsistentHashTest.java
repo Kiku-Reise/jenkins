@@ -23,18 +23,21 @@
  */
 package hudson.util;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
-import hudson.util.CopyOnWriteMap.Hash;
-import org.junit.Test;
-
-import java.util.Random;
-import java.util.Map;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Set;
 import java.util.HashSet;
-import java.util.Map.Entry;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import org.junit.Ignore;
+import org.junit.Test;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -45,29 +48,28 @@ public class ConsistentHashTest {
      */
     @Test
     public void basic() {
-        ConsistentHash<String> hash = new ConsistentHash<String>();
+        ConsistentHash<String> hash = new ConsistentHash<>();
         hash.add("data1");
         hash.add("data2");
         hash.add("data3");
 
-        System.out.println(hash.lookup(0));
-
-        // there's one in 2^32 chance that this test fails, but these two query points are
-        // only off by one.
+        // In a pure random scenario, there's one in 2^32 chance that this test fails
+        // but as we control the input and the hash function is deterministic, there is no risk of failure
         String x = hash.lookup(Integer.MIN_VALUE);
         String y = hash.lookup(Integer.MAX_VALUE);
-        assertEquals(x,y);
+        // both values are data3
+        assertEquals(x, y);
 
         // list them up
         Iterator<String> itr = hash.list(Integer.MIN_VALUE).iterator();
-        Set<String> all = new HashSet<String>();
+        Set<String> all = new HashSet<>();
         String z = itr.next();
         all.add(z);
-        assertEquals(z,x);
+        assertEquals(z, x);
         all.add(itr.next());
         all.add(itr.next());
-        assertTrue(!itr.hasNext());
-        assertEquals(3,all.size());
+        assertFalse(itr.hasNext());
+        assertEquals(3, all.size());
     }
 
     /**
@@ -75,21 +77,24 @@ public class ConsistentHashTest {
      */
     @Test
     public void unevenDistribution() {
-        ConsistentHash<String> hash = new ConsistentHash<String>();
-        hash.add("even",10);
-        hash.add("odd",100);
+        ConsistentHash<String> hash = new ConsistentHash<>();
+        hash.add("Even",10);
+        hash.add("Odd",100);
 
         Random r = new Random(0);
-        int even=0,odd=0;
-        for(int i=0; i<1000; i++) {
+        int even = 0;
+        int odd = 0;
+        for(int i = 0; i < 1000; i++) {
             String v = hash.lookup(r.nextInt());
-            if(v.equals("even"))    even++;
-            else                    odd++;
+            if(v.equals("Even")) {
+                even++;
+            } else {
+                odd++;
+            }
         }
 
-        // again, there's a small chance tha this test fails.
-        System.out.printf("%d/%d\n",even,odd);
-        assertTrue(even*8<odd);
+        System.out.printf("%d/%d%n", even, odd);
+        assertTrue(even * 8 < odd);
     }
 
     /**
@@ -97,31 +102,32 @@ public class ConsistentHashTest {
      */
     @Test
     public void removal() {
-        ConsistentHash<Integer> hash = new ConsistentHash<Integer>();
-        for( int i=0; i<10; i++ )
+        ConsistentHash<Integer> hash = new ConsistentHash<>();
+        for (int i = 0; i < 10; i++) {
             hash.add(i);
+        }
 
         // what was the mapping before the mutation?
-        Map<Integer,Integer> before = new HashMap<Integer, Integer>();
+        Map<Integer, Integer> before = new HashMap<>();
         Random r = new Random(0);
-        for(int i=0; i<1000; i++) {
+        for (int i = 0; i < 1000; i++) {
             int q = r.nextInt();
-            before.put(q,hash.lookup(q));
+            before.put(q, hash.lookup(q));
         }
 
         // remove a node
         hash.remove(0);
 
         // verify that the mapping remains consistent
-        for (Entry<Integer,Integer> e : before.entrySet()) {
+        for (Map.Entry<Integer,Integer> e : before.entrySet()) {
             int m = hash.lookup(e.getKey());
-            assertTrue(e.getValue()==0 || e.getValue()==m);
+            assertTrue(e.getValue() == 0 || e.getValue() == m);
         }
     }
 
     @Test
     public void emptyBehavior() {
-        ConsistentHash<String> hash = new ConsistentHash<String>();
+        ConsistentHash<String> hash = new ConsistentHash<>();
         assertEquals(0, hash.countAllPoints());
         assertFalse(hash.list(0).iterator().hasNext());
         assertNull(hash.lookup(0));
@@ -130,7 +136,7 @@ public class ConsistentHashTest {
 
     @Test
     public void countAllPoints() {
-        ConsistentHash<String> hash = new ConsistentHash<String>();
+        ConsistentHash<String> hash = new ConsistentHash<>();
         assertEquals(0, hash.countAllPoints());
         hash.add("foo", 10);
         assertEquals(10, hash.countAllPoints());
@@ -142,7 +148,7 @@ public class ConsistentHashTest {
 
     @Test
     public void defaultReplicationIsOneHundred() {
-        ConsistentHash<String> hash = new ConsistentHash<String>();
+        ConsistentHash<String> hash = new ConsistentHash<>();
         assertEquals(0, hash.countAllPoints());
         hash.add("foo");
         assertEquals(100, hash.countAllPoints());
@@ -150,7 +156,7 @@ public class ConsistentHashTest {
 
     @Test
     public void setCustomDefaultReplication() {
-        ConsistentHash<String> hash = new ConsistentHash<String>((ConsistentHash.Hash<String>) ConsistentHash.DEFAULT_HASH, 7);
+        ConsistentHash<String> hash = new ConsistentHash<>((ConsistentHash.Hash<String>) ConsistentHash.DEFAULT_HASH, 7);
         assertEquals(0, hash.countAllPoints());
         hash.add("foo");
         assertEquals(7, hash.countAllPoints());
@@ -159,37 +165,35 @@ public class ConsistentHashTest {
     @Test
     public void usesCustomHash() {
         final RuntimeException exception = new RuntimeException();
-        ConsistentHash.Hash<String> hashFunction = new ConsistentHash.Hash<String>() {
-            public String hash(String str) {
-                throw exception;
-            }
+        ConsistentHash.Hash<String> hashFunction = str -> {
+            throw exception;
         };
 
-        try {
-            ConsistentHash<String> hash = new ConsistentHash<String>(hashFunction);
+        final RuntimeException e = assertThrows(RuntimeException.class, () -> {
+            ConsistentHash<String> hash = new ConsistentHash<>(hashFunction);
             hash.add("foo");
-            fail("Didn't use custom hash function");
-        } catch (RuntimeException e) {
-            assertSame(exception, e);
-        }
+        });
+        assertSame(exception, e);
     }
 
     /**
      * This test doesn't fail but it's written to measure the performance of the consistent hash function with large data set.
      */
     @Test
+    @Ignore("Helper test for performance, no assertion")
     public void speed() {
-        Map<String,Integer> data = new Hash<String, Integer>();
-        for (int i = 0; i < 1000; i++)
-            data.put("node" + i,100);
-        data.put("tail",100);
+        Map<String,Integer> data = new CopyOnWriteMap.Hash<>();
+        for (int i = 0; i < 1000; i++) {
+            data.put("node" + i, 100);
+        }
+        data.put("tail", 100);
 
         long start = System.currentTimeMillis();
-        for (int j=0; j<10; j++) {
-            ConsistentHash<String> b = new ConsistentHash<String>();
+        for (int j = 0; j < 10; j++) {
+            ConsistentHash<String> b = new ConsistentHash<>();
             b.addAll(data);
         }
 
-        System.out.println(System.currentTimeMillis()-start);
+        System.out.println(System.currentTimeMillis() - start);
     }
 }

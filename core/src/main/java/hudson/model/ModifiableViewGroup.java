@@ -23,9 +23,8 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import java.io.IOException;
-
-import javax.annotation.Nonnull;
 
 /**
  * {@link ViewGroup} that can be modified.
@@ -38,5 +37,5 @@ public interface ModifiableViewGroup extends ViewGroup {
     /**
      * Add new {@link View} to this {@link ViewGroup}.
      */
-    void addView(@Nonnull View view) throws IOException;
+    void addView(@NonNull View view) throws IOException;
 }

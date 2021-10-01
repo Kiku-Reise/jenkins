@@ -24,24 +24,25 @@
 package hudson.slaves;
 
 import com.google.common.annotations.VisibleForTesting;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.Extension;
 import hudson.FilePath;
-import jenkins.util.SystemProperties;
 import hudson.model.Computer;
 import hudson.model.Slave;
 import hudson.model.TaskListener;
 import hudson.remoting.Channel;
 import hudson.remoting.PingThread;
-import jenkins.security.MasterToSlaveCallable;
-import jenkins.slaves.PingFailureAnalyzer;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-
-import javax.annotation.CheckForNull;
 import java.io.IOException;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.security.MasterToSlaveCallable;
+import jenkins.slaves.PingFailureAnalyzer;
+import jenkins.util.SystemProperties;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
  * Establish a periodic ping to keep connections between {@link Slave agents}
@@ -143,11 +144,7 @@ public class ChannelPinger extends ComputerListener {
 
         @Override
         public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + pingIntervalSeconds;
-            result = prime * result + pingTimeoutSeconds;
-            return result;
+            return Objects.hash(pingIntervalSeconds, pingTimeoutSeconds);
         }
 
         @Override
@@ -165,10 +162,7 @@ public class ChannelPinger extends ComputerListener {
             if (pingIntervalSeconds != other.pingIntervalSeconds) {
                 return false;
             }
-            if (pingTimeoutSeconds != other.pingTimeoutSeconds) {
-                return false;
-            }
-            return true;
+            return pingTimeoutSeconds == other.pingTimeoutSeconds;
         }
 
         protected Object readResolve() {
@@ -184,7 +178,7 @@ public class ChannelPinger extends ComputerListener {
     public static void setUpPingForChannel(final Channel channel, final SlaveComputer computer, int timeoutSeconds, int intervalSeconds, final boolean analysis) {
         LOGGER.log(Level.FINE, "setting up ping on {0} with a {1} seconds interval and {2} seconds timeout", new Object[] {channel.getName(), intervalSeconds, timeoutSeconds});
         final AtomicBoolean isInClosed = new AtomicBoolean(false);
-        final PingThread t = new PingThread(channel, timeoutSeconds * 1000L, intervalSeconds * 1000L) {
+        final PingThread t = new PingThread(channel, TimeUnit.SECONDS.toMillis(timeoutSeconds), TimeUnit.SECONDS.toMillis(intervalSeconds)) {
             @Override
             protected void onDead(Throwable cause) {
                     if (analysis) {

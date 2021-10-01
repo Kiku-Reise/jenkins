@@ -23,20 +23,19 @@
  */
 package hudson.views;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.DescriptorExtensionList;
 import hudson.Extension;
 import hudson.ExtensionPoint;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
+import hudson.model.MyViewsProperty;
 import hudson.model.View;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import javax.annotation.Nonnull;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.Jenkins;
-import hudson.model.MyViewsProperty;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
@@ -64,9 +63,10 @@ public abstract class MyViewsTabBar extends AbstractDescribableImpl<MyViewsTabBa
      * Returns all the registered {@link ListViewColumn} descriptors.
      */
     public static DescriptorExtensionList<MyViewsTabBar, Descriptor<MyViewsTabBar>> all() {
-        return Jenkins.getInstance().<MyViewsTabBar, Descriptor<MyViewsTabBar>>getDescriptorList(MyViewsTabBar.class);
+        return Jenkins.get().getDescriptorList(MyViewsTabBar.class);
     }
 
+    @Override
     public MyViewsTabBarDescriptor getDescriptor() {
         return (MyViewsTabBarDescriptor)super.getDescriptor();
     }
@@ -78,17 +78,12 @@ public abstract class MyViewsTabBar extends AbstractDescribableImpl<MyViewsTabBa
      * @return the sorted views
      * @since 2.37
      */
-    @Nonnull
+    @NonNull
     @Restricted(NoExternalUse.class)
     @SuppressWarnings("unused") // invoked from stapler view
-    public List<View> sort(@Nonnull List<? extends View> views) {
+    public List<View> sort(@NonNull List<? extends View> views) {
         List<View> result = new ArrayList<>(views);
-        Collections.sort(result, new Comparator<View>() {
-            @Override
-            public int compare(View o1, View o2) {
-                return o1.getDisplayName().compareTo(o2.getDisplayName());
-            }
-        });
+        result.sort(Comparator.comparing(View::getDisplayName));
         return result;
     }
 

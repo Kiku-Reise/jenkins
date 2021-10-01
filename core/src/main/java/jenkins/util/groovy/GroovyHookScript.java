@@ -1,20 +1,21 @@
 package jenkins.util.groovy;
 
+import static java.util.logging.Level.WARNING;
+
+import edu.umd.cs.findbugs.annotations.NonNull;
 import groovy.lang.Binding;
 import groovy.lang.GroovyCodeSource;
 import groovy.lang.GroovyShell;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.TreeSet;
-import static java.util.logging.Level.WARNING;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
 import javax.servlet.ServletContext;
 import jenkins.model.Jenkins;
+import jenkins.util.SystemProperties;
 
 /**
  * A collection of Groovy scripts that are executed as various hooks.
@@ -38,25 +39,26 @@ import jenkins.model.Jenkins;
  * @author Kohsuke Kawaguchi
  */
 public class GroovyHookScript {
+    private static final String ROOT_PATH = SystemProperties.getString(GroovyHookScript.class.getName() + ".ROOT_PATH");
     private final String hook;
     private final Binding bindings = new Binding();
     private final ServletContext servletContext;
-    private final File home;
+    private final File rootDir;
     private final ClassLoader loader;
 
     @Deprecated
     public GroovyHookScript(String hook) {
-        this(hook, Jenkins.getActiveInstance());
+        this(hook, Jenkins.get());
     }
 
     private GroovyHookScript(String hook, Jenkins j) {
         this(hook, j.servletContext, j.getRootDir(), j.getPluginManager().uberClassLoader);
     }
 
-    public GroovyHookScript(String hook, @Nonnull ServletContext servletContext, @Nonnull File home, @Nonnull ClassLoader loader) {
+    public GroovyHookScript(String hook, @NonNull ServletContext servletContext, @NonNull File jenkinsHome, @NonNull ClassLoader loader) {
         this.hook = hook;
         this.servletContext = servletContext;
-        this.home = home;
+        this.rootDir = ROOT_PATH != null ? new File(ROOT_PATH) : jenkinsHome;
         this.loader = loader;
     }
 
@@ -83,7 +85,7 @@ public class GroovyHookScript {
         Set<String> resources = servletContext.getResourcePaths("/WEB-INF/"+ hookGroovyD +"/");
         if (resources!=null) {
             // sort to execute them in a deterministic order
-            for (String res : new TreeSet<String>(resources)) {
+            for (String res : new TreeSet<>(resources)) {
                 try {
                     URL bundled = servletContext.getResource(res);
                     execute(bundled);
@@ -93,16 +95,12 @@ public class GroovyHookScript {
             }
         }
 
-        File script = new File(home, hookGroovy);
+        File script = new File(rootDir, hookGroovy);
         execute(script);
 
-        File scriptD = new File(home, hookGroovyD);
+        File scriptD = new File(rootDir, hookGroovyD);
         if (scriptD.isDirectory()) {
-            File[] scripts = scriptD.listFiles(new FileFilter() {
-                public boolean accept(File f) {
-                    return f.getName().endsWith(".groovy");
-                }
-            });
+            File[] scripts = scriptD.listFiles(f -> f.getName().endsWith(".groovy"));
             if (scripts!=null) {
                 // sort to run them in a deterministic order
                 Arrays.sort(scripts);

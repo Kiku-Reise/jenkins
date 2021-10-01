@@ -23,15 +23,15 @@
  */
 package hudson.slaves;
 
-import java.util.Map;
-import java.util.WeakHashMap;
-
+import hudson.Extension;
 import hudson.model.Computer;
-import hudson.model.Queue;
-import jenkins.model.Jenkins;
 import hudson.model.Node;
 import hudson.model.PeriodicWork;
-import hudson.Extension;
+import hudson.model.Queue;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.concurrent.TimeUnit;
+import jenkins.model.Jenkins;
 import org.jenkinsci.Symbol;
 
 /**
@@ -48,13 +48,11 @@ public class ComputerRetentionWork extends PeriodicWork {
      */
     private final Map<Computer, Long> nextCheck = new WeakHashMap<>();
 
+    @Override
     public long getRecurrencePeriod() {
         return MIN;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @SuppressWarnings("unchecked")
     @Override
     protected void doRun() {
@@ -70,7 +68,7 @@ public class ComputerRetentionWork extends PeriodicWork {
                         // at the moment I don't trust strategies to wait more than 60 minutes
                         // strategies need to wait at least one minute
                         final long waitInMins = Math.max(1, Math.min(60, c.getRetentionStrategy().check(c)));
-                        nextCheck.put(c, startRun + waitInMins*1000*60 /*MINS->MILLIS*/);
+                        nextCheck.put(c, startRun + TimeUnit.MINUTES.toMillis(waitInMins));
                     }
                 }
             });

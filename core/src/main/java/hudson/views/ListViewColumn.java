@@ -30,19 +30,18 @@ import hudson.model.Describable;
 import hudson.model.Descriptor;
 import hudson.model.Descriptor.FormException;
 import hudson.model.DescriptorVisibilityFilter;
-import jenkins.model.Jenkins;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
 import hudson.model.ListView;
 import hudson.model.View;
 import hudson.util.DescriptorList;
-import org.kohsuke.stapler.export.Exported;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
+import org.kohsuke.stapler.export.Exported;
 
 /**
  * Extension point for adding a column to a table rendering of {@link Item}s, such as {@link ListView}.
@@ -87,7 +86,7 @@ public abstract class ListViewColumn implements ExtensionPoint, Describable<List
      * Returns all the registered {@link ListViewColumn} descriptors.
      */
     public static DescriptorExtensionList<ListViewColumn, Descriptor<ListViewColumn>> all() {
-        return Jenkins.getInstance().<ListViewColumn, Descriptor<ListViewColumn>>getDescriptorList(ListViewColumn.class);
+        return Jenkins.get().getDescriptorList(ListViewColumn.class);
     }
 
     /**
@@ -96,7 +95,7 @@ public abstract class ListViewColumn implements ExtensionPoint, Describable<List
      *      Use {@link #all()} for read access and {@link Extension} for registration.
      */
     @Deprecated
-    public static final DescriptorList<ListViewColumn> LIST = new DescriptorList<ListViewColumn>(ListViewColumn.class);
+    public static final DescriptorList<ListViewColumn> LIST = new DescriptorList<>(ListViewColumn.class);
 
     /**
      * Whether this column will be shown by default.
@@ -115,8 +114,9 @@ public abstract class ListViewColumn implements ExtensionPoint, Describable<List
      * For compatibility reason, this method may not return a {@link ListViewColumnDescriptor}
      * and instead return a plain {@link Descriptor} instance.
      */
+    @Override
     public Descriptor<ListViewColumn> getDescriptor() {
-        return Jenkins.getInstance().getDescriptorOrDie(getClass());
+        return Jenkins.get().getDescriptorOrDie(getClass());
     }
 
     /**
@@ -152,7 +152,7 @@ public abstract class ListViewColumn implements ExtensionPoint, Describable<List
     private static List<ListViewColumn> createDefaultInitialColumnList(List<Descriptor<ListViewColumn>> descriptors) {
         // OK, set up default list of columns:
         // create all instances
-        ArrayList<ListViewColumn> r = new ArrayList<ListViewColumn>();
+        ArrayList<ListViewColumn> r = new ArrayList<>();
         final JSONObject emptyJSON = new JSONObject();
         for (Descriptor<ListViewColumn> d : descriptors)
             try {

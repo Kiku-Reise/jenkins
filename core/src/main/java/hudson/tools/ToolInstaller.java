@@ -28,14 +28,12 @@ import hudson.ExtensionPoint;
 import hudson.FilePath;
 import hudson.Util;
 import hudson.model.Describable;
-import jenkins.model.Jenkins;
 import hudson.model.Label;
 import hudson.model.Node;
 import hudson.model.TaskListener;
-
 import java.io.File;
 import java.io.IOException;
-
+import jenkins.model.Jenkins;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -85,7 +83,7 @@ public abstract class ToolInstaller implements Describable<ToolInstaller>, Exten
      * (By default, just checks the label.)
      */
     public boolean appliesTo(Node node) {
-        Label l = Jenkins.getInstance().getLabel(label);
+        Label l = Jenkins.get().getLabel(label);
         return l == null || l.contains(node);
     }
 
@@ -130,8 +128,9 @@ public abstract class ToolInstaller implements Describable<ToolInstaller>, Exten
         return s != null ? s.replaceAll("[^A-Za-z0-9_.-]+", "_") : null;
     }
 
+    @Override
     public ToolInstallerDescriptor<?> getDescriptor() {
-        return (ToolInstallerDescriptor) Jenkins.getInstance().getDescriptorOrDie(getClass());
+        return (ToolInstallerDescriptor) Jenkins.get().getDescriptorOrDie(getClass());
     }
 
     @Restricted(NoExternalUse.class)

@@ -23,21 +23,19 @@
  */
 package hudson.views;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.DescriptorExtensionList;
 import hudson.Extension;
 import hudson.ExtensionPoint;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
-import hudson.model.Descriptor.FormException;
+import hudson.model.ListView;
 import hudson.model.View;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import javax.annotation.Nonnull;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.Jenkins;
-import hudson.model.ListView;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
@@ -65,7 +63,7 @@ public abstract class ViewsTabBar extends AbstractDescribableImpl<ViewsTabBar> i
      * Returns all the registered {@link ViewsTabBar} descriptors.
      */
     public static DescriptorExtensionList<ViewsTabBar, Descriptor<ViewsTabBar>> all() {
-        return Jenkins.getInstance().<ViewsTabBar, Descriptor<ViewsTabBar>>getDescriptorList(ViewsTabBar.class);
+        return Jenkins.get().getDescriptorList(ViewsTabBar.class);
     }
 
     @Override
@@ -80,17 +78,12 @@ public abstract class ViewsTabBar extends AbstractDescribableImpl<ViewsTabBar> i
      * @return the sorted views
      * @since 2.37
      */
-    @Nonnull
+    @NonNull
     @Restricted(NoExternalUse.class)
     @SuppressWarnings("unused") // invoked from stapler view
-    public List<View> sort(@Nonnull List<? extends View> views) {
-        List<View> result = new ArrayList<View>(views);
-        Collections.sort(result, new Comparator<View>() {
-            @Override
-            public int compare(View o1, View o2) {
-                return o1.getDisplayName().compareTo(o2.getDisplayName());
-            }
-        });
+    public List<View> sort(@NonNull List<? extends View> views) {
+        List<View> result = new ArrayList<>(views);
+        result.sort(Comparator.comparing(View::getDisplayName));
         return result;
     }
 

@@ -23,10 +23,24 @@
  */
 package hudson.model;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeThat;
+
 import com.gargoylesoftware.htmlunit.Page;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import groovy.util.XmlSlurper;
 import hudson.DescriptorExtensionList;
 import hudson.ExtensionList;
+import hudson.security.ProjectMatrixAuthorizationStrategy;
 import hudson.security.csrf.CrumbIssuer;
 import hudson.slaves.ComputerLauncher;
 import hudson.slaves.DumbSlave;
@@ -35,24 +49,14 @@ import hudson.slaves.NodeProperty;
 import hudson.slaves.NodePropertyDescriptor;
 import hudson.slaves.RetentionStrategy;
 import hudson.util.FormValidation;
-import static hudson.util.FormValidation.Kind.WARNING;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import org.apache.commons.io.IOUtils;
-import static org.hamcrest.Matchers.anyOf;
-import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assume.assumeThat;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
@@ -107,7 +111,7 @@ public class SlaveTest {
         con.setRequestProperty("Content-Type", "application/xml;charset=UTF-8");
         con.setRequestProperty(CrumbIssuer.DEFAULT_CRUMB_NAME, "test");
         con.setDoOutput(true);
-        con.getOutputStream().write(xml.getBytes("UTF-8"));
+        con.getOutputStream().write(xml.getBytes(StandardCharsets.UTF_8));
         con.getOutputStream().close();
         IOUtils.copy(con.getInputStream(), System.out);
     }
@@ -117,9 +121,9 @@ public class SlaveTest {
         DumbSlave.DescriptorImpl d = j.jenkins.getDescriptorByType(DumbSlave.DescriptorImpl.class);
         assertEquals(FormValidation.ok(), d.doCheckRemoteFS("c:\\"));
         assertEquals(FormValidation.ok(), d.doCheckRemoteFS("/tmp"));
-        assertEquals(WARNING, d.doCheckRemoteFS("relative/path").kind);
-        assertEquals(WARNING, d.doCheckRemoteFS("/net/foo/bar/zot").kind);
-        assertEquals(WARNING, d.doCheckRemoteFS("\\\\machine\\folder\\foo").kind);
+        assertEquals(FormValidation.Kind.WARNING, d.doCheckRemoteFS("relative/path").kind);
+        assertEquals(FormValidation.Kind.WARNING, d.doCheckRemoteFS("/net/foo/bar/zot").kind);
+        assertEquals(FormValidation.Kind.WARNING, d.doCheckRemoteFS("\\\\machine\\folder\\foo").kind);
     }
 
     @Test
@@ -152,7 +156,7 @@ public class SlaveTest {
         assertJnlpJarUrlFails(slave, "./../foo/bar");
     }
 
-    private void assertJnlpJarUrlFails(@Nonnull Slave slave, @Nonnull String url) throws Exception {
+    private void assertJnlpJarUrlFails(@NonNull Slave slave, @NonNull String url) throws Exception {
         // Raw access to API
         Slave.JnlpJar jnlpJar = slave.getComputer().getJnlpJars(url);
         try {
@@ -164,7 +168,7 @@ public class SlaveTest {
         fail("Expected the MalformedURLException for " + url);
     }
 
-    private void assertJnlpJarUrlIsAllowed(@Nonnull Slave slave, @Nonnull String url) throws Exception {
+    private void assertJnlpJarUrlIsAllowed(@NonNull Slave slave, @NonNull String url) throws Exception {
         // Raw access to API
         Slave.JnlpJar jnlpJar = slave.getComputer().getJnlpJars(url);
         assertNotNull(jnlpJar.getURL());
@@ -178,7 +182,7 @@ public class SlaveTest {
 
     @Test
     @Issue("JENKINS-36280")
-    public void launcherFiltering() throws Exception {
+    public void launcherFiltering() {
         DumbSlave.DescriptorImpl descriptor =
                 j.getInstance().getDescriptorByType(DumbSlave.DescriptorImpl.class);
         DescriptorExtensionList<ComputerLauncher, Descriptor<ComputerLauncher>> descriptors =
@@ -196,7 +200,7 @@ public class SlaveTest {
 
     @Test
     @Issue("JENKINS-36280")
-    public void retentionFiltering() throws Exception {
+    public void retentionFiltering() {
         DumbSlave.DescriptorImpl descriptor =
                 j.getInstance().getDescriptorByType(DumbSlave.DescriptorImpl.class);
         DescriptorExtensionList<RetentionStrategy<?>, Descriptor<RetentionStrategy<?>>> descriptors = RetentionStrategy.all();
@@ -213,7 +217,8 @@ public class SlaveTest {
 
     @Test
     @Issue("JENKINS-36280")
-    public void propertyFiltering() throws Exception {
+    public void propertyFiltering() {
+        j.jenkins.setAuthorizationStrategy(new ProjectMatrixAuthorizationStrategy()); // otherwise node descriptor is not available
         DumbSlave.DescriptorImpl descriptor =
                 j.getInstance().getDescriptorByType(DumbSlave.DescriptorImpl.class);
         DescriptorExtensionList<NodeProperty<?>, NodePropertyDescriptor> descriptors = NodeProperty.all();
@@ -238,12 +243,12 @@ public class SlaveTest {
         }
 
         @Override
-        public boolean filterType(@Nonnull Class<?> contextClass, @Nonnull Descriptor descriptor) {
+        public boolean filterType(@NonNull Class<?> contextClass, @NonNull Descriptor descriptor) {
             return !descriptors.contains(descriptor);
         }
 
         @Override
-        public boolean filter(@CheckForNull Object context, @Nonnull Descriptor descriptor) {
+        public boolean filter(@CheckForNull Object context, @NonNull Descriptor descriptor) {
             return !descriptors.contains(descriptor);
         }
     }

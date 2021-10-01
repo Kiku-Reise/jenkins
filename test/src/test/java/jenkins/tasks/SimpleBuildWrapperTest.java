@@ -24,6 +24,10 @@
 
 package jenkins.tasks;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import hudson.EnvVars;
 import hudson.FilePath;
 import hudson.Functions;
@@ -38,11 +42,14 @@ import hudson.model.Descriptor;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
 import hudson.model.JDK;
+import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.Slave;
 import hudson.model.TaskListener;
+import hudson.scm.ChangeLogParser;
+import hudson.scm.SCM;
+import hudson.scm.SCMRevisionState;
 import hudson.slaves.ComputerLauncher;
-import hudson.slaves.NodeProperty;
 import hudson.slaves.RetentionStrategy;
 import hudson.slaves.SlaveComputer;
 import hudson.tasks.BuildWrapperDescriptor;
@@ -53,14 +60,14 @@ import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.Locale;
-import org.junit.Test;
-import static org.junit.Assert.*;
 import org.junit.Assume;
 import org.junit.ClassRule;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.jvnet.hudson.test.BuildWatcher;
 import org.jvnet.hudson.test.CaptureEnvironmentBuilder;
+import org.jvnet.hudson.test.FailureBuilder;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.TestBuilder;
@@ -127,7 +134,7 @@ public class SimpleBuildWrapperTest {
     }
     private static class SpecialEnvSlave extends Slave {
         SpecialEnvSlave(File remoteFS, ComputerLauncher launcher) throws Descriptor.FormException, IOException {
-            super("special", "SpecialEnvSlave", remoteFS.getAbsolutePath(), 1, Mode.NORMAL, "", launcher, RetentionStrategy.NOOP, Collections.<NodeProperty<?>>emptyList());
+            super("special", "SpecialEnvSlave", remoteFS.getAbsolutePath(), 1, Mode.NORMAL, "", launcher, RetentionStrategy.NOOP, Collections.emptyList());
         }
         @Override public Computer createComputer() {
             return new SpecialEnvComputer(this);
@@ -148,7 +155,9 @@ public class SimpleBuildWrapperTest {
     @Test public void disposer() throws Exception {
         FreeStyleProject p = r.createFreeStyleProject();
         p.getBuildWrappersList().add(new WrapperWithDisposer());
-        r.assertLogContains("ran DisposerImpl", r.buildAndAssertSuccess(p));
+        FreeStyleBuild b = r.buildAndAssertSuccess(p);
+        r.assertLogContains("ran DisposerImpl #1", b);
+        r.assertLogNotContains("ran DisposerImpl #2", b);
     }
     public static class WrapperWithDisposer extends SimpleBuildWrapper {
         @Override public void setUp(Context context, Run<?,?> build, FilePath workspace, Launcher launcher, TaskListener listener, EnvVars initialEnvironment) throws IOException, InterruptedException {
@@ -156,11 +165,78 @@ public class SimpleBuildWrapperTest {
         }
         private static final class DisposerImpl extends Disposer {
             private static final long serialVersionUID = 1;
+            private int tearDownCount = 0;
             @Override public void tearDown(Run<?,?> build, FilePath workspace, Launcher launcher, TaskListener listener) throws IOException, InterruptedException {
-                listener.getLogger().println("ran DisposerImpl");
+                listener.getLogger().println("ran DisposerImpl #" + ++tearDownCount);
             }
         }
-        @TestExtension("disposer") public static class DescriptorImpl extends BuildWrapperDescriptor {
+        @TestExtension({ "disposer", "failedJobWithInterruptedDisposer" }) public static class DescriptorImpl extends BuildWrapperDescriptor {
+            @Override public boolean isApplicable(AbstractProject<?,?> item) {
+                return true;
+            }
+        }
+    }
+
+    @Test public void disposerForPreCheckoutWrapper() throws Exception {
+        FreeStyleProject p = r.createFreeStyleProject();
+        p.getBuildWrappersList().add(new PreCheckoutWrapperWithDisposer());
+        FreeStyleBuild b = r.buildAndAssertSuccess(p);
+        r.assertLogContains("ran DisposerImpl #1", b);
+        r.assertLogNotContains("ran DisposerImpl #2", b);
+    }
+    @Issue("JENKINS-43889")
+    @Test public void disposerForPreCheckoutWrapperWithScmError() throws Exception {
+        FreeStyleProject p = r.createFreeStyleProject();
+        p.setScm(new FailingSCM());
+        p.getBuildWrappersList().add(new PreCheckoutWrapperWithDisposer());
+        FreeStyleBuild b = r.assertBuildStatus(Result.FAILURE, p.scheduleBuild2(0));
+        r.assertLogContains("ran DisposerImpl #1", b);
+        r.assertLogNotContains("ran DisposerImpl #2", b);
+    }
+    public static class PreCheckoutWrapperWithDisposer extends WrapperWithDisposer {
+        @Override
+        protected boolean runPreCheckout() {
+            return true;
+        }
+        @TestExtension({ "disposerForPreCheckoutWrapper", "disposerForPreCheckoutWrapperWithScmError" }) public static class DescriptorImpl extends BuildWrapperDescriptor {
+            @Override public boolean isApplicable(AbstractProject<?,?> item) {
+                return true;
+            }
+        }
+    }
+    public static class FailingSCM extends SCM {
+        @Override
+        public void checkout(Run<?, ?> build, Launcher launcher, FilePath workspace, TaskListener listener, File changelogFile, SCMRevisionState baseline) throws IOException, InterruptedException {
+            throw new RuntimeException("SCM failed");
+        }
+        @Override
+        public ChangeLogParser createChangeLogParser() {
+            return null;
+        }
+    }
+
+    @Test public void failedJobWithInterruptedDisposer() throws Exception {
+        FreeStyleProject p = r.createFreeStyleProject();
+        p.getBuildersList().add(new FailureBuilder());
+        p.getBuildWrappersList().add(new WrapperWithDisposer());
+        p.getBuildWrappersList().add(new InterruptedDisposerWrapper());
+        // build is ABORTED because of InterruptedException during tearDown (trumps the FAILURE result)
+        FreeStyleBuild b = r.assertBuildStatus(Result.ABORTED, p.scheduleBuild2(0));
+        r.assertLogContains("tearDown InterruptedDisposerImpl", b);
+        r.assertLogContains("ran DisposerImpl", b); // ran despite earlier InterruptedException
+    }
+    public static class InterruptedDisposerWrapper extends SimpleBuildWrapper {
+        @Override public void setUp(Context context, Run<?,?> build, FilePath workspace, Launcher launcher, TaskListener listener, EnvVars initialEnvironment) throws IOException, InterruptedException {
+            context.setDisposer(new InterruptedDisposerImpl());
+        }
+        private static final class InterruptedDisposerImpl extends Disposer {
+            private static final long serialVersionUID = 1;
+            @Override public void tearDown(Run<?,?> build, FilePath workspace, Launcher launcher, TaskListener listener) throws IOException, InterruptedException {
+                listener.getLogger().println("tearDown InterruptedDisposerImpl");
+                throw new InterruptedException("interrupted in InterruptedDisposerImpl");
+            }
+        }
+        @TestExtension("failedJobWithInterruptedDisposer") public static class DescriptorImpl extends BuildWrapperDescriptor {
             @Override public boolean isApplicable(AbstractProject<?,?> item) {
                 return true;
             }
@@ -187,10 +263,10 @@ public class SimpleBuildWrapperTest {
         private static class UpcaseFilter extends ConsoleLogFilter implements Serializable {
             private static final long serialVersionUID = 1;
             @SuppressWarnings("rawtypes") // inherited
-            @Override public OutputStream decorateLogger(AbstractBuild _ignore, final OutputStream logger) throws IOException, InterruptedException {
-                return new LineTransformationOutputStream() {
+            @Override public OutputStream decorateLogger(AbstractBuild _ignore, OutputStream logger) throws IOException, InterruptedException {
+                return new LineTransformationOutputStream.Delegating(logger) {
                     @Override protected void eol(byte[] b, int len) throws IOException {
-                        logger.write(new String(b, 0, len).toUpperCase(Locale.ROOT).getBytes());
+                        out.write(new String(b, 0, len).toUpperCase(Locale.ROOT).getBytes());
                     }
                 };
             }

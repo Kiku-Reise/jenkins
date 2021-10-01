@@ -26,13 +26,12 @@ package jenkins;
 import hudson.Extension;
 import hudson.model.RootAction;
 import hudson.util.HttpResponses;
+import java.util.Locale;
 import jenkins.util.ResourceBundleUtil;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.StaplerRequest;
-
-import java.util.Locale;
 
 /**
  * Internationalization REST (ish) API.
@@ -43,25 +42,16 @@ import java.util.Locale;
 @Restricted(NoExternalUse.class)
 public class I18n implements RootAction {
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getIconFileName() {
         return null;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getDisplayName() {
         return null;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getUrlName() {
         return "i18n";

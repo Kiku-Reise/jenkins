@@ -23,20 +23,19 @@
  */
 package jenkins.util;
 
-import net.sf.json.JSONObject;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.PluginWrapper;
-import java.util.logging.Logger;
 import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 import jenkins.model.Jenkins;
+import net.sf.json.JSONObject;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
  * Simple {@link java.util.ResourceBundle} utility class.
@@ -58,7 +57,7 @@ public class ResourceBundleUtil {
      * @return The bundle JSON.
      * @throws MissingResourceException Missing resource bundle.
      */
-    public static @Nonnull JSONObject getBundle(@Nonnull String baseName) throws MissingResourceException {
+    public static @NonNull JSONObject getBundle(@NonNull String baseName) throws MissingResourceException {
         return getBundle(baseName, Locale.getDefault());
     }
 
@@ -69,8 +68,8 @@ public class ResourceBundleUtil {
      * @return The bundle JSON.
      * @throws MissingResourceException Missing resource bundle.
      */
-    public static @Nonnull JSONObject getBundle(@Nonnull String baseName, @Nonnull Locale locale) throws MissingResourceException {
-        String bundleKey = baseName + ":" + locale.toString();
+    public static @NonNull JSONObject getBundle(@NonNull String baseName, @NonNull Locale locale) throws MissingResourceException {
+        String bundleKey = baseName + ":" + locale;
         JSONObject bundleJSON = bundles.get(bundleKey);
 
         if (bundleJSON != null) {
@@ -80,7 +79,7 @@ public class ResourceBundleUtil {
         ResourceBundle bundle = getBundle(baseName, locale, Jenkins.class.getClassLoader());
         if (bundle == null) {
             // Not in Jenkins core. Check the plugins.
-            Jenkins jenkins = Jenkins.getInstance(); // will never return null
+            Jenkins jenkins = Jenkins.getInstanceOrNull();
             if (jenkins != null) {
                 for (PluginWrapper plugin : jenkins.getPluginManager().getPlugins()) {
                     bundle = getBundle(baseName, locale, plugin.classLoader);
@@ -109,7 +108,7 @@ public class ResourceBundleUtil {
      * @param classLoader The classLoader
      * @return The bundle JSON.
      */
-    private static @CheckForNull ResourceBundle getBundle(@Nonnull String baseName, @Nonnull Locale locale, @Nonnull ClassLoader classLoader) {
+    private static @CheckForNull ResourceBundle getBundle(@NonNull String baseName, @NonNull Locale locale, @NonNull ClassLoader classLoader) {
         try {
             return ResourceBundle.getBundle(baseName, locale, classLoader);
         } catch (MissingResourceException e) {
@@ -125,7 +124,7 @@ public class ResourceBundleUtil {
      * @param bundle The resource bundle.
      * @return The bundle JSON.
      */
-    private static JSONObject toJSONObject(@Nonnull ResourceBundle bundle) {
+    private static JSONObject toJSONObject(@NonNull ResourceBundle bundle) {
         JSONObject json = new JSONObject();
         for (String key : bundle.keySet()) {
             json.put(key, bundle.getString(key));

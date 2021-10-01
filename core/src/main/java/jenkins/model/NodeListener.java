@@ -23,11 +23,10 @@
  */
 package jenkins.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
 import hudson.model.Node;
-
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -45,24 +44,24 @@ public abstract class NodeListener implements ExtensionPoint {
     /**
      * Node is being created.
      */
-    protected void onCreated(@Nonnull Node node) {}
+    protected void onCreated(@NonNull Node node) {}
 
     /**
      * Node is being updated.
      */
-    protected void onUpdated(@Nonnull Node oldOne, @Nonnull Node newOne) {}
+    protected void onUpdated(@NonNull Node oldOne, @NonNull Node newOne) {}
 
     /**
      * Node is being deleted.
      */
-    protected void onDeleted(@Nonnull Node node) {}
+    protected void onDeleted(@NonNull Node node) {}
 
     /**
      * Inform listeners that node is being created.
      *
      * @param node A node being created.
      */
-    public static void fireOnCreated(@Nonnull Node node) {
+    public static void fireOnCreated(@NonNull Node node) {
         for (NodeListener nl: all()) {
             try {
                 nl.onCreated(node);
@@ -78,7 +77,7 @@ public abstract class NodeListener implements ExtensionPoint {
      * @param oldOne Old configuration.
      * @param newOne New Configuration.
      */
-    public static void fireOnUpdated(@Nonnull Node oldOne, @Nonnull Node newOne) {
+    public static void fireOnUpdated(@NonNull Node oldOne, @NonNull Node newOne) {
         for (NodeListener nl: all()) {
             try {
                 nl.onUpdated(oldOne, newOne);
@@ -93,7 +92,7 @@ public abstract class NodeListener implements ExtensionPoint {
      *
      * @param node A node being removed.
      */
-    public static void fireOnDeleted(@Nonnull Node node) {
+    public static void fireOnDeleted(@NonNull Node node) {
         for (NodeListener nl: all()) {
             try {
                 nl.onDeleted(node);
@@ -106,7 +105,7 @@ public abstract class NodeListener implements ExtensionPoint {
     /**
      * Get all {@link NodeListener}s registered in Jenkins.
      */
-    public static @Nonnull List<NodeListener> all() {
+    public static @NonNull List<NodeListener> all() {
         return ExtensionList.lookup(NodeListener.class);
     }
 }

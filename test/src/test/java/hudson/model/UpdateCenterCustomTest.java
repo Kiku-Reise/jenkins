@@ -24,13 +24,13 @@
 package hudson.model;
 
 
-import javax.servlet.ServletContext;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.junit.Assert.assertThat;
+
+import javax.servlet.ServletContext;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
-
 
 /**
  * Tests of the custom {@link UpdateCenter} implementation.
@@ -53,7 +53,7 @@ public class UpdateCenterCustomTest {
         
         private static final String PROPERTY_NAME = UpdateCenter.class.getName()+".className";
 
-        public CustomUpdateCenterRule(Class<?> ucClass) {
+        CustomUpdateCenterRule(Class<?> ucClass) {
             this.updateCenterClassName = ucClass.getName();
         }
 
@@ -74,12 +74,11 @@ public class UpdateCenterCustomTest {
         public String getUpdateCenterClassName() {
             return updateCenterClassName;
         }
-    };
+    }
     
     public static final class CustomUpdateCenter extends UpdateCenter {
 
         public CustomUpdateCenter() {
-            super();
         }
         
         public CustomUpdateCenter(UpdateCenterConfiguration config) {

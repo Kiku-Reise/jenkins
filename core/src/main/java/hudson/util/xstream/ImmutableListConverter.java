@@ -33,12 +33,9 @@ import com.thoughtworks.xstream.converters.reflection.ReflectionProvider;
 import com.thoughtworks.xstream.converters.reflection.SerializableConverter;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.mapper.Mapper;
-
 import hudson.util.RobustReflectionConverter;
-
 import java.util.ArrayList;
 import java.util.List;
-
 import jenkins.util.xstream.CriticalXStreamException;
 
 /**
@@ -80,12 +77,10 @@ public class ImmutableListConverter extends CollectionConverter {
 	                    items.add(item);
 	                } catch (CriticalXStreamException e) {
 	                    throw e;
-	                } catch (XStreamException e) {
-	                    RobustReflectionConverter.addErrorInContext(context, e);
-	                } catch (LinkageError e) {
+	                } catch (XStreamException | LinkageError e) {
 	                    RobustReflectionConverter.addErrorInContext(context, e);
 	                }
-	                reader.moveUp();
+                    reader.moveUp();
 	            }
 
                 // move back up past the elements element.

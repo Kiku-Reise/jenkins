@@ -26,14 +26,13 @@ package jenkins.security.apitoken;
 import hudson.Extension;
 import hudson.model.AdministrativeMonitor;
 import hudson.util.HttpResponses;
+import java.io.IOException;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.interceptor.RequirePOST;
-
-import java.io.IOException;
 
 /**
  * Monitor that the API Token cannot be created for a user without existing legacy token
@@ -51,7 +50,12 @@ public class ApiTokenPropertyEnabledNewLegacyAdministrativeMonitor extends Admin
     public boolean isActivated() {
         return ApiTokenPropertyConfiguration.get().isCreationOfLegacyTokenEnabled();
     }
-    
+
+    @Override
+    public boolean isSecurity() {
+        return true;
+    }
+
     @RequirePOST
     public HttpResponse doAct(@QueryParameter String no) throws IOException {
         if (no == null) {

@@ -1,22 +1,22 @@
 package hudson.console;
 
+import static org.junit.Assert.assertTrue;
+
 import hudson.model.Computer;
 import hudson.model.Run;
 import hudson.slaves.SlaveComputer;
-import org.junit.Assert;
+import java.io.IOException;
+import java.io.OutputStream;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.TestExtension;
 
-import java.io.IOException;
-import java.io.OutputStream;
-
 /**
  * @author Kohsuke Kawaguchi
  */
-public class ConsoleLogFilterTest extends Assert {
+public class ConsoleLogFilterTest {
     @Rule
     public JenkinsRule r = new JenkinsRule();
 
@@ -38,8 +38,8 @@ public class ConsoleLogFilterTest extends Assert {
         }
 
         @Override
-        public OutputStream decorateLogger(final Computer c, final OutputStream out) throws IOException, InterruptedException {
-            return new LineTransformationOutputStream() {
+        public OutputStream decorateLogger(final Computer c, OutputStream out) throws IOException, InterruptedException {
+            return new LineTransformationOutputStream.Delegating(out) {
                 @Override
                 protected void eol(byte[] b, int len) throws IOException {
                     out.write(("[["+c.getName()+"]] ").getBytes());

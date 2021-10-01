@@ -23,6 +23,8 @@
  */
 package hudson.util;
 
+import static java.util.logging.Level.FINE;
+
 import com.thoughtworks.xstream.XStreamException;
 import com.thoughtworks.xstream.converters.ConversionException;
 import com.thoughtworks.xstream.converters.Converter;
@@ -33,18 +35,19 @@ import com.thoughtworks.xstream.converters.reflection.ObjectAccessException;
 import com.thoughtworks.xstream.converters.reflection.PureJavaReflectionProvider;
 import com.thoughtworks.xstream.converters.reflection.ReflectionConverter;
 import com.thoughtworks.xstream.converters.reflection.ReflectionProvider;
-import com.thoughtworks.xstream.converters.reflection.SerializationMethodInvoker;
 import com.thoughtworks.xstream.core.util.Primitives;
+import com.thoughtworks.xstream.core.util.SerializationMembers;
 import com.thoughtworks.xstream.io.ExtendedHierarchicalStreamWriterHelper;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
 import com.thoughtworks.xstream.mapper.Mapper;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.diagnosis.OldDataMonitor;
 import hudson.model.Saveable;
+import hudson.security.ACL;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -53,11 +56,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import static java.util.logging.Level.FINE;
+import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
-import javax.annotation.concurrent.GuardedBy;
+import jenkins.model.Jenkins;
+import jenkins.util.SystemProperties;
 import jenkins.util.xstream.CriticalXStreamException;
+import net.jcip.annotations.GuardedBy;
+import org.acegisecurity.Authentication;
 
 /**
  * Custom {@link ReflectionConverter} that handle errors more gracefully.
@@ -70,14 +75,17 @@ import jenkins.util.xstream.CriticalXStreamException;
  * </ul>
  *
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class RobustReflectionConverter implements Converter {
+
+    private static /* non-final for Groovy */ boolean RECORD_FAILURES_FOR_ALL_AUTHENTICATIONS = SystemProperties.getBoolean(RobustReflectionConverter.class.getName() + ".recordFailuresForAllAuthentications", false);
+    private static /* non-final for Groovy */ boolean RECORD_FAILURES_FOR_ADMINS = SystemProperties.getBoolean(RobustReflectionConverter.class.getName() + ".recordFailuresForAdmins", false);
 
     protected final ReflectionProvider reflectionProvider;
     protected final Mapper mapper;
-    protected transient SerializationMethodInvoker serializationMethodInvoker;
+    protected transient SerializationMembers serializationMethodInvoker;
     private transient ReflectionProvider pureJavaReflectionProvider;
-    private final @Nonnull XStream2.ClassOwnership classOwnership;
-    /** {@code pkg.Clazz#fieldName} */
+    private final @NonNull XStream2.ClassOwnership classOwnership;
     /** There are typically few critical fields around, but we end up looking up in this map a lot.
         in addition, this map is really only written to during static initialization, so we should use
         reader writer lock to avoid locking as much as possible.  In addition, to avoid looking up
@@ -85,7 +93,7 @@ public class RobustReflectionConverter implements Converter {
         with the fields as the keys.**/
     private final ReadWriteLock criticalFieldsLock = new ReentrantReadWriteLock();
     @GuardedBy("criticalFieldsLock")
-    private final Map<String, Set<String>> criticalFields = new HashMap<String, Set<String>>();
+    private final Map<String, Set<String>> criticalFields = new HashMap<>();
 
     public RobustReflectionConverter(Mapper mapper, ReflectionProvider reflectionProvider) {
         this(mapper, reflectionProvider, new XStream2().new PluginClassOwnership());
@@ -95,7 +103,7 @@ public class RobustReflectionConverter implements Converter {
         this.reflectionProvider = reflectionProvider;
         assert classOwnership != null;
         this.classOwnership = classOwnership;
-        serializationMethodInvoker = new SerializationMethodInvoker();
+        serializationMethodInvoker = new SerializationMembers();
     }
 
     void addCriticalField(Class<?> clazz, String field) {
@@ -105,7 +113,7 @@ public class RobustReflectionConverter implements Converter {
             // If the class already exists, then add a new field, otherwise
             // create the hash map field
             if (!criticalFields.containsKey(field)) {
-                criticalFields.put(field, new HashSet<String>());
+                criticalFields.put(field, new HashSet<>());
             }
             criticalFields.get(field).add(clazz.getName());
         }
@@ -133,10 +141,12 @@ public class RobustReflectionConverter implements Converter {
         }
     }
 
+    @Override
     public boolean canConvert(Class type) {
         return true;
     }
 
+    @Override
     public void marshal(Object original, final HierarchicalStreamWriter writer, final MarshallingContext context) {
         final Object source = serializationMethodInvoker.callWriteReplace(original);
 
@@ -189,6 +199,8 @@ public class RobustReflectionConverter implements Converter {
 
         // Attributes might be preferred to child elements ...
          reflectionProvider.visitSerializableFields(source, new ReflectionProvider.Visitor() {
+            @SuppressWarnings("deprecation") // deliberately calling deprecated methods?
+            @Override
             public void visit(String fieldName, Class type, Class definedIn, Object value) {
                 SingleValueConverter converter = mapper.getConverterFromItemType(fieldName, type, definedIn);
                 if (converter == null) converter = mapper.getConverterFromItemType(fieldName, type);
@@ -207,14 +219,14 @@ public class RobustReflectionConverter implements Converter {
 
         // Child elements not covered already processed as attributes ...
         reflectionProvider.visitSerializableFields(source, new ReflectionProvider.Visitor() {
+            @Override
             public void visit(String fieldName, Class fieldType, Class definedIn, Object newObj) {
                 if (!seenAsAttributes.contains(fieldName) && newObj != null) {
                     Mapper.ImplicitCollectionMapping mapping = mapper.getImplicitCollectionDefForFieldName(source.getClass(), fieldName);
                     if (mapping != null) {
                         if (mapping.getItemFieldName() != null) {
                             Collection list = (Collection) newObj;
-                            for (Iterator iter = list.iterator(); iter.hasNext();) {
-                                Object obj = iter.next();
+                            for (Object obj : list) {
                                 writeField(fieldName, mapping.getItemFieldName(), mapping.getItemType(), definedIn, obj);
                             }
                         } else {
@@ -227,6 +239,7 @@ public class RobustReflectionConverter implements Converter {
                 }
             }
 
+            @SuppressWarnings("deprecation") // TODO HierarchicalStreamWriter#startNode(String, Class) in 1.5.0
             private void writeField(String fieldName, String aliasName, Class fieldType, Class definedIn, Object newObj) {
                 try {
                     if (!mapper.shouldSerializeMember(definedIn, aliasName)) {
@@ -265,6 +278,7 @@ public class RobustReflectionConverter implements Converter {
         context.convertAnother(newObj, converter);
     }
 
+    @Override
     public Object unmarshal(final HierarchicalStreamReader reader, final UnmarshallingContext context) {
         Object result = instantiateNewInstance(reader, context);
         result = doUnmarshal(result, reader, context);
@@ -289,7 +303,7 @@ public class RobustReflectionConverter implements Converter {
                 SingleValueConverter converter = mapper.getConverterFromAttribute(field.getDeclaringClass(),attrName,field.getType());
                 Class type = field.getType();
                 if (converter == null) {
-                    converter = mapper.getConverterFromItemType(type);
+                    converter = mapper.getConverterFromItemType(type); // TODO add fieldName & definedIn args
                 }
                 if (converter != null) {
                     Object value = converter.fromString(reader.getAttribute(attrAlias));
@@ -366,19 +380,55 @@ public class RobustReflectionConverter implements Converter {
             reader.moveUp();
         }
 
-        // Report any class/field errors in Saveable objects
-        if (context.get("ReadError") != null && context.get("Saveable") == result) {
-            OldDataMonitor.report((Saveable)result, (ArrayList<Throwable>)context.get("ReadError"));
+        // Report any class/field errors in Saveable objects if it happens during loading of existing data from disk
+        if (shouldReportUnloadableDataForCurrentUser() && context.get("ReadError") != null && context.get("Saveable") == result) {
+            // Avoid any error in OldDataMonitor to be catastrophic. See JENKINS-62231 and JENKINS-59582
+            // The root cause is the OldDataMonitor extension is not ready before a plugin triggers an error, for 
+            // example when trying to load a field that was created by a new version and you downgrade to the previous
+            // one.
+            try {
+                OldDataMonitor.report((Saveable) result, (ArrayList<Throwable>) context.get("ReadError"));
+            } catch (Throwable t) {
+                // it should be already reported, but we report with INFO just in case
+                StringBuilder message = new StringBuilder("There was a problem reporting unmarshalling field errors");
+                Level level = Level.WARNING;
+                if (t instanceof IllegalStateException && t.getMessage().contains("Expected 1 instance of " + OldDataMonitor.class.getName())) {
+                    message.append(". Make sure this code is executed after InitMilestone.EXTENSIONS_AUGMENTED stage, for example in Plugin#postInitialize instead of Plugin#start");
+                    level = Level.INFO; // it was reported when getting the singleton for OldDataMonitor
+                }
+                // it should be already reported, but we report with INFO just in case
+                LOGGER.log(level, message.toString(), t);
+            }
             context.put("ReadError", null);
         }
         return result;
+    }
+
+    /**
+     * Returns whether the current user authentication is allowed to have errors loading data reported.
+     *
+     * <p>{@link ACL#SYSTEM} always has errors reported.
+     * If {@link #RECORD_FAILURES_FOR_ALL_AUTHENTICATIONS} is {@code true}, errors are reported for all authentications.
+     * Otherwise errors are reported for users with {@link Jenkins#ADMINISTER} permission if {@link #RECORD_FAILURES_FOR_ADMINS} is {@code true}.</p>
+     *
+     * @return whether the current user authentication is allowed to have errors loading data reported.
+     */
+    private static boolean shouldReportUnloadableDataForCurrentUser() {
+        if (RECORD_FAILURES_FOR_ALL_AUTHENTICATIONS) {
+            return true;
+        }
+        final Authentication authentication = Jenkins.getAuthentication();
+        if (authentication.equals(ACL.SYSTEM)) {
+            return true;
+        }
+        return RECORD_FAILURES_FOR_ADMINS && Jenkins.get().hasPermission(Jenkins.ADMINISTER);
     }
 
     public static void addErrorInContext(UnmarshallingContext context, Throwable e) {
         LOGGER.log(FINE, "Failed to load", e);
         ArrayList<Throwable> list = (ArrayList<Throwable>)context.get("ReadError");
         if (list == null)
-            context.put("ReadError", list = new ArrayList<Throwable>());
+            context.put("ReadError", list = new ArrayList<>());
         list.add(e);
     }
 
@@ -477,7 +527,7 @@ public class RobustReflectionConverter implements Converter {
     }
 
     private Object readResolve() {
-        serializationMethodInvoker = new SerializationMethodInvoker();
+        serializationMethodInvoker = new SerializationMembers();
         return this;
     }
 

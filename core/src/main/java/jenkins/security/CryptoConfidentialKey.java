@@ -1,18 +1,14 @@
 package jenkins.security;
 
-import hudson.Main;
 import hudson.util.Secret;
-import jenkins.model.Jenkins;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.DoNotUse;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.IOException;
-import java.security.GeneralSecurityException;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
  * {@link ConfidentialKey} that stores a {@link SecretKey} for shared-secret cryptography (AES).
@@ -24,7 +20,9 @@ public class CryptoConfidentialKey extends ConfidentialKey {
     @Restricted(NoExternalUse.class) // TODO pending API
     public static final int DEFAULT_IV_LENGTH = 16;
 
-    private volatile SecretKey secret;
+    private ConfidentialStore lastCS;
+    private SecretKey secret;
+
     public CryptoConfidentialKey(String id) {
         super(id);
     }
@@ -33,25 +31,23 @@ public class CryptoConfidentialKey extends ConfidentialKey {
         this(owner.getName()+'.'+shortName);
     }
 
-    private SecretKey getKey() {
-        try {
-            if (secret==null) {
-                synchronized (this) {
-                    if (secret==null) {
-                        byte[] payload = load();
-                        if (payload==null) {
-                            payload = ConfidentialStore.get().randomBytes(256);
-                            store(payload);
-                        }
-                        // Due to the stupid US export restriction JDK only ships 128bit version.
-                        secret = new SecretKeySpec(payload,0,128/8, KEY_ALGORITHM);
-                    }
+    private synchronized SecretKey getKey() {
+        ConfidentialStore cs = ConfidentialStore.get();
+        if (secret == null || cs != lastCS) {
+            lastCS = cs;
+            try {
+                byte[] payload = load();
+                if (payload == null) {
+                    payload = cs.randomBytes(256);
+                    store(payload);
                 }
+                // Due to the stupid US export restriction JDK only ships 128bit version.
+                secret = new SecretKeySpec(payload, 0, 128 / 8, KEY_ALGORITHM);
+            } catch (IOException e) {
+                throw new Error("Failed to load the key: " + getId(), e);
             }
-            return secret;
-        } catch (IOException e) {
-            throw new Error("Failed to load the key: "+getId(),e);
         }
+        return secret;
     }
 
     /**
@@ -142,15 +138,4 @@ public class CryptoConfidentialKey extends ConfidentialKey {
     private static final String KEY_ALGORITHM = "AES";
     private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
 
-    /**
-     * Reset the internal secret key for testing.
-     */
-    @Restricted(NoExternalUse.class)
-    public void resetForTest() {
-        if (Main.isUnitTest) {
-            this.secret = null;
-        } else {
-            throw new IllegalStateException("Only for testing");
-        }
-    }
 }

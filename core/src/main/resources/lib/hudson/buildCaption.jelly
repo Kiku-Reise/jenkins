@@ -43,8 +43,36 @@ THE SOFTWARE.
 	      </tr></table>
 	    </div>
 	  </j:if>
-	  
+
 	  <l:icon alt="${it.iconColor.description}" class="${it.buildStatusIconClassName} icon-xlg" tooltip="${it.iconColor.description}"/>
-	  <d:invokeBody />
-	</h1>
+        <script>
+          (function(){
+            function updateBuildCaptionIcon(){
+              new Ajax.Request("statusIcon",{
+                method: "get",
+                onComplete: function(rsp,_) {
+                  var isBuilding = rsp.getResponseHeader("X-Building");
+                  if (isBuilding == "true") {
+                    setTimeout(updateBuildCaptionIcon, 5000)
+                  } else {
+                    var progressBar = document.querySelector(".build-caption-progress-container");
+                    if (progressBar) {
+                      progressBar.style.display = "none";
+                    }
+                  }
+                  document.querySelector(".build-caption .icon-xlg").outerHTML = rsp.responseText;
+                }
+              });
+            }
+
+            window.addEventListener("load", function(){
+              Event.observe(window, "jenkins:consoleFinished", updateBuildCaptionIcon);
+            });
+
+          })();
+        </script>
+        <span style="margin-left:.2em;">
+          <d:invokeBody trim="true"/>
+        </span>
+    </h1>
 </j:jelly>

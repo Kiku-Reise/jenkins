@@ -28,7 +28,6 @@ import hudson.ExtensionList;
 import hudson.ExtensionPoint;
 import hudson.model.Computer;
 import hudson.model.Executor;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -92,7 +91,7 @@ public abstract class LoadPredictor implements ExtensionPoint {
         @Override
         public Iterable<FutureLoad> predict(MappingWorksheet plan, final Computer computer, long start, long eternity) {
             long now = System.currentTimeMillis();
-            List<FutureLoad> fl = new ArrayList<FutureLoad>();
+            List<FutureLoad> fl = new ArrayList<>();
             for (Executor e : computer.getExecutors()) {
                 if (e.isIdle())     continue;
 

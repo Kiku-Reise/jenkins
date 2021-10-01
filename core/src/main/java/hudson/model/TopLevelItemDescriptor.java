@@ -23,10 +23,14 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
+import java.io.StringWriter;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import jenkins.model.Jenkins;
 import jenkins.model.item_category.ItemCategory;
-import org.acegisecurity.AccessDeniedException;
 import org.apache.commons.jelly.Script;
 import org.apache.commons.jelly.XMLOutput;
 import org.apache.commons.lang.StringUtils;
@@ -39,12 +43,7 @@ import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.WebApp;
 import org.kohsuke.stapler.jelly.DefaultScriptInvoker;
 import org.kohsuke.stapler.jelly.JellyClassTearOff;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
-import java.io.StringWriter;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.springframework.security.access.AccessDeniedException;
 
 /**
  * {@link Descriptor} for {@link TopLevelItem}s.
@@ -145,7 +144,7 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
      *
      * @since 2.0
      */
-    @Nonnull
+    @NonNull
     public String getDescription() {
         Stapler stapler = Stapler.getCurrent();
         if (stapler != null) {
@@ -177,7 +176,7 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
      *
      * @since 2.0
      */
-    @Nonnull
+    @NonNull
     public String getCategoryId() {
         return ItemCategory.UncategorizedCategory.ID;
     }
@@ -255,6 +254,7 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
      *      This is not a valid operation for {@link Item}s.
      */
     @Deprecated
+    @Override
     public TopLevelItem newInstance(StaplerRequest req) throws FormException {
         throw new UnsupportedOperationException();
     }
@@ -267,7 +267,7 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
      */
     @Deprecated
     public TopLevelItem newInstance(String name) {
-        return newInstance(Jenkins.getInstance(), name);
+        return newInstance(Jenkins.get(), name);
     }
 
     /**

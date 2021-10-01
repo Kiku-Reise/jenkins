@@ -26,7 +26,6 @@ package jenkins.model;
 import hudson.ExtensionPoint;
 import hudson.model.Describable;
 import hudson.model.Descriptor;
-
 import java.util.List;
 
 /**
@@ -67,7 +66,7 @@ public class SimplePageDecorator extends Descriptor<SimplePageDecorator> impleme
     }
 
     /**
-     * The first found LoginDecarator, there can only be one.
+     * The first found LoginDecorator, there can only be one.
      * @return the first found {@link SimplePageDecorator}
      */
     public static SimplePageDecorator first(){

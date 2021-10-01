@@ -24,11 +24,10 @@
 
 package hudson.slaves;
 
-import hudson.model.Node;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.EnvironmentSpecific;
+import hudson.model.Node;
 import hudson.model.TaskListener;
-
-import javax.annotation.Nonnull;
 import java.io.IOException;
 
 /**
@@ -46,5 +45,5 @@ public interface NodeSpecific<T extends NodeSpecific<T>> {
     /**
      * Returns a specialized copy of T for functioning in the given node.
      */
-    T forNode(@Nonnull Node node, TaskListener log) throws IOException, InterruptedException;
+    T forNode(@NonNull Node node, TaskListener log) throws IOException, InterruptedException;
 }

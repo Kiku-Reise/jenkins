@@ -23,16 +23,9 @@
  */
 package jenkins.telemetry.impl;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
-import jenkins.model.DownloadSettings;
-import jenkins.model.Jenkins;
-import jenkins.telemetry.Telemetry;
-import jenkins.util.SystemProperties;
-import net.sf.json.JSONObject;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-
-import javax.annotation.Nonnull;
+import hudson.util.VersionNumber;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -40,6 +33,12 @@ import java.util.Date;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.TreeMap;
+import jenkins.model.Jenkins;
+import jenkins.telemetry.Telemetry;
+import jenkins.util.SystemProperties;
+import net.sf.json.JSONObject;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
  * Telemetry implementation gathering information about system properties.
@@ -47,31 +46,31 @@ import java.util.TreeMap;
 @Extension
 @Restricted(NoExternalUse.class)
 public class SecuritySystemProperties extends Telemetry {
-    @Nonnull
+    @NonNull
     @Override
     public String getId() {
         return "security-system-properties";
     }
 
-    @Nonnull
+    @NonNull
     @Override
     public LocalDate getStart() {
         return LocalDate.of(2018, 9, 1);
     }
 
-    @Nonnull
+    @NonNull
     @Override
     public LocalDate getEnd() {
         return LocalDate.of(2018, 12, 1);
     }
 
-    @Nonnull
+    @NonNull
     @Override
     public String getDisplayName() {
         return "Use of Security-related Java system properties";
     }
 
-    @Nonnull
+    @NonNull
     @Override
     public JSONObject createContent() {
         Map<String, String> security = new TreeMap<>();
@@ -93,15 +92,13 @@ public class SecuritySystemProperties extends Telemetry {
         putBoolean(security, "org.kohsuke.stapler.Facet.allowViewNamePathTraversal", false);
         putBoolean(security, "org.kohsuke.stapler.jelly.CustomJellyContext.escapeByDefault", true);
 
-        // not controlled by a system property for historical reasons only
-        security.put("jenkins.model.DownloadSettings.useBrowser", Boolean.toString(DownloadSettings.get().isUseBrowser()));
-
         putStringInfo(security, "hudson.model.ParametersAction.safeParameters");
         putStringInfo(security, "hudson.model.DirectoryBrowserSupport.CSP");
         putStringInfo(security, "hudson.security.HudsonPrivateSecurityRealm.ID_REGEX");
 
         Map<String, Object> info = new TreeMap<>();
-        info.put("core", Jenkins.getVersion().toString());
+        VersionNumber jenkinsVersion = Jenkins.getVersion();
+        info.put("core", jenkinsVersion != null ? jenkinsVersion.toString() : "UNKNOWN");
         info.put("clientDate", clientDateString());
         info.put("properties", security);
 

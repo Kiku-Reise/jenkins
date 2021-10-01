@@ -23,12 +23,11 @@
  */
 package hudson.model;
 
-import hudson.ExtensionPoint;
 import hudson.DescriptorExtensionList;
+import hudson.ExtensionPoint;
 import hudson.model.Descriptor.FormException;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
-
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.export.ExportedBean;
 
@@ -63,17 +62,19 @@ public abstract class UserProperty implements ReconfigurableDescribable<UserProp
     }
 
     // descriptor must be of the UserPropertyDescriptor type
+    @Override
     public UserPropertyDescriptor getDescriptor() {
-        return (UserPropertyDescriptor) Jenkins.getInstance().getDescriptorOrDie(getClass());
+        return (UserPropertyDescriptor) Jenkins.get().getDescriptorOrDie(getClass());
     }
 
     /**
      * Returns all the registered {@link UserPropertyDescriptor}s.
      */
     public static DescriptorExtensionList<UserProperty,UserPropertyDescriptor> all() {
-        return Jenkins.getInstance().<UserProperty,UserPropertyDescriptor>getDescriptorList(UserProperty.class);
+        return Jenkins.get().getDescriptorList(UserProperty.class);
     }
 
+    @Override
     public UserProperty reconfigure(StaplerRequest req, JSONObject form) throws FormException {
         return form==null ? null : getDescriptor().newInstance(req, form);
     }

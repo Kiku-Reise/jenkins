@@ -1,10 +1,9 @@
 package jenkins.security;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
-
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -19,7 +18,7 @@ import java.util.NoSuchElementException;
  */
 public abstract class QueueItemAuthenticatorProvider implements ExtensionPoint {
 
-    @Nonnull
+    @NonNull
     public abstract List<QueueItemAuthenticator> getAuthenticators();
 
     public static Iterable<QueueItemAuthenticator> authenticators() {
@@ -36,12 +35,12 @@ public abstract class QueueItemAuthenticatorProvider implements ExtensionPoint {
 
         @Override
         public boolean hasNext() {
-            while ((delegate == null || !delegate.hasNext()) && (providers.hasNext())) {
+            while ((delegate == null || !delegate.hasNext()) && providers.hasNext()) {
                 final QueueItemAuthenticatorProvider provider = providers.next();
                 if (provider == null) {
                     continue;
                 }
-                delegate = new ArrayList<QueueItemAuthenticator>(provider.getAuthenticators()).iterator();
+                delegate = new ArrayList<>(provider.getAuthenticators()).iterator();
             }
             return delegate != null && delegate.hasNext();
         }

@@ -1,14 +1,9 @@
 package jenkins.util;
 
+import static org.junit.Assert.assertEquals;
+
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
-
-import java.util.concurrent.TimeUnit;
-
-import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.*;
-
-import static jenkins.util.TimeDuration.*;
 
 @Issue("JENKINS-44052")
 public class TimeDurationTest {

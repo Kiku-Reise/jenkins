@@ -23,20 +23,19 @@
  */
 package hudson.util;
 
-import org.xml.sax.helpers.XMLFilterImpl;
-import org.xml.sax.XMLFilter;
-import org.xml.sax.ContentHandler;
-import org.xml.sax.Attributes;
-import org.xml.sax.SAXException;
-import org.apache.commons.jelly.XMLOutput;
-
-import java.util.Locale;
-import java.util.Stack;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
+import org.apache.commons.jelly.XMLOutput;
+import org.xml.sax.Attributes;
+import org.xml.sax.ContentHandler;
+import org.xml.sax.SAXException;
+import org.xml.sax.XMLFilter;
+import org.xml.sax.helpers.XMLFilterImpl;
 
 /**
  * {@link XMLFilter} that checks the proper nesting of table related tags.
@@ -54,8 +53,8 @@ import java.util.Arrays;
  */
 public class TableNestChecker extends XMLFilterImpl {
 
-    private final Stack<Checker> elements = new Stack<Checker>();
-    private final Stack<String> tagNames = new Stack<String>();
+    private final Stack<Checker> elements = new Stack<>();
+    private final Stack<String> tagNames = new Stack<>();
 
     public static void applyTo(XMLOutput xo) {
         xo.setContentHandler(new TableNestChecker(xo.getContentHandler()));
@@ -98,30 +97,26 @@ public class TableNestChecker extends XMLFilterImpl {
         boolean isAllowed(String childTag);
     }
 
-    private static final Checker ALL_ALLOWED = new Checker() {
-        public boolean isAllowed(String childTag) {
-            return true;
-        }
-    };
+    private static final Checker ALL_ALLOWED = childTag -> true;
 
     private static final class InList implements Checker {
         private final Set<String> tags;
 
         private InList(String... tags) {
-            this.tags = new HashSet<String>(Arrays.asList(tags));
+            this.tags = new HashSet<>(Arrays.asList(tags));
         }
 
+        @Override
         public boolean isAllowed(String childTag) {
             return tags.contains(childTag);
         }
     }
 
-    private static final Map<String,Checker> CHECKERS = new HashMap<String, Checker>();
+    private static final Map<String,Checker> CHECKERS = new HashMap<>();
 
     static {
         CHECKERS.put("TABLE",new InList("TR","THEAD","TBODY"));
         InList rows = new InList("TR");
-        CHECKERS.put("THEAD",rows);
         CHECKERS.put("THEAD",rows);
         CHECKERS.put("TR",   new InList("TD","TH"));
     }

@@ -23,13 +23,13 @@
  */
 package jenkins.model.lazy;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.FileUtils;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
-
-import java.io.File;
-import java.io.IOException;
 
 /**
  * Builder for creating a {@link FakeMap}
@@ -48,13 +48,13 @@ public class FakeMapBuilder implements TestRule {
 
     public FakeMapBuilder add(int n) throws IOException {
         File build = new File(dir, Integer.toString(n));
-        FileUtils.writeStringToFile(new File(build, "n"), Integer.toString(n));
+        FileUtils.writeStringToFile(new File(build, "n"), Integer.toString(n), StandardCharsets.US_ASCII);
         build.mkdir();
         return this;
     }
 
     /**
-     * Adds a build record under the givn ID but make it unloadable,
+     * Adds a build record under the given ID but make it unloadable,
      * which will cause a failure when a load is attempted on this build ID.
      */
     public FakeMapBuilder addUnloadable(int n) throws IOException {
@@ -68,6 +68,7 @@ public class FakeMapBuilder implements TestRule {
         return new FakeMap(dir);
     }
 
+    @Override
     public Statement apply(final Statement base, Description description) {
         return new Statement() {
             @Override

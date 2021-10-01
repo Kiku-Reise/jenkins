@@ -1,32 +1,35 @@
 package jenkins.security;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.model.Descriptor.FormException;
 import hudson.model.User;
 import hudson.model.UserProperty;
 import hudson.model.UserPropertyDescriptor;
 import hudson.security.SecurityRealm;
-import jenkins.model.Jenkins;
-import net.sf.json.JSONObject;
-import org.acegisecurity.Authentication;
-import org.acegisecurity.GrantedAuthority;
-import org.acegisecurity.GrantedAuthorityImpl;
-import org.acegisecurity.userdetails.UserDetails;
-import org.jenkinsci.Symbol;
-import org.kohsuke.stapler.StaplerRequest;
-
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
+import net.sf.json.JSONObject;
+import org.jenkinsci.Symbol;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.StaplerRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 /**
  * Remembers the set of {@link GrantedAuthority}s that was obtained the last time the user has logged in.
  *
- * This allows us to implement {@link User#impersonate()} with proper set of groups.
+ * This allows us to implement {@link User#impersonate2()} with proper set of groups.
  *
  * @author Kohsuke Kawaguchi
  * @since 1.556
@@ -45,36 +48,48 @@ public class LastGrantedAuthoritiesProperty extends UserProperty {
     	return this;
     }
 
-    public GrantedAuthority[] getAuthorities() {
+    /**
+     * @since 2.266
+     */
+    public Collection<? extends GrantedAuthority> getAuthorities2() {
         String[] roles = this.roles;    // capture to a variable for immutability
 
         if(roles == null){
-            return new GrantedAuthority[]{SecurityRealm.AUTHENTICATED_AUTHORITY};
+            return Collections.singleton(SecurityRealm.AUTHENTICATED_AUTHORITY2);
         }
 
-        String authenticatedRole = SecurityRealm.AUTHENTICATED_AUTHORITY.getAuthority();
+        String authenticatedRole = SecurityRealm.AUTHENTICATED_AUTHORITY2.getAuthority();
         List<GrantedAuthority> grantedAuthorities = new ArrayList<>(roles.length + 1);
-        grantedAuthorities.add(new GrantedAuthorityImpl(authenticatedRole));
+        grantedAuthorities.add(new SimpleGrantedAuthority(authenticatedRole));
 
-        for (int i = 0; i < roles.length; i++){
+        for (String role : roles) {
             // to avoid having twice that role
-            if(!authenticatedRole.equals(roles[i])){
-                grantedAuthorities.add(new GrantedAuthorityImpl(roles[i]));
+            if (!authenticatedRole.equals(role)) {
+                grantedAuthorities.add(new SimpleGrantedAuthority(role));
             }
         }
 
-        return grantedAuthorities.toArray(new GrantedAuthority[grantedAuthorities.size()]);
+        return grantedAuthorities;
+    }
+
+    /**
+     * @deprecated use {@link #getAuthorities2}
+     */
+    @Deprecated
+    public org.acegisecurity.GrantedAuthority[] getAuthorities() {
+        return org.acegisecurity.GrantedAuthority.fromSpring(getAuthorities2());
     }
 
     /**
      * Persist the information with the new {@link UserDetails}.
      */
-    public void update(@Nonnull Authentication auth) throws IOException {
-        List<String> roles = new ArrayList<String>();
+    @Restricted(NoExternalUse.class)
+    public void update(@NonNull Authentication auth) throws IOException {
+        List<String> roles = new ArrayList<>();
         for (GrantedAuthority ga : auth.getAuthorities()) {
             roles.add(ga.getAuthority());
         }
-        String[] a = roles.toArray(new String[roles.size()]);
+        String[] a = roles.toArray(new String[0]);
         if (!Arrays.equals(this.roles,a)) {
             this.roles = a;
             this.timestamp = System.currentTimeMillis();
@@ -99,7 +114,7 @@ public class LastGrantedAuthoritiesProperty extends UserProperty {
     @Extension
     public static class SecurityListenerImpl extends SecurityListener {
         @Override
-        protected void loggedIn(@Nonnull String username) {
+        protected void loggedIn(@NonNull String username) {
             try {
                 // user should have been created but may not have been saved for some realms
                 // but as this is a callback of a successful login we can safely create the user.
@@ -107,7 +122,7 @@ public class LastGrantedAuthoritiesProperty extends UserProperty {
                 LastGrantedAuthoritiesProperty o = u.getProperty(LastGrantedAuthoritiesProperty.class);
                 if (o==null)
                     u.addProperty(o=new LastGrantedAuthoritiesProperty());
-                Authentication a = Jenkins.getAuthentication();
+                Authentication a = Jenkins.getAuthentication2();
                 if (a!=null && a.getName().equals(username))
                     o.update(a);    // just for defensive sanity checking
             } catch (IOException e) {
@@ -116,13 +131,13 @@ public class LastGrantedAuthoritiesProperty extends UserProperty {
         }
 
         @Override
-        protected void failedToLogIn(@Nonnull String username) {
+        protected void failedToLogIn(@NonNull String username) {
             // while this initially seemed like a good idea to avoid allowing wrong impersonation for too long,
             // doing this means a malicious user can break the impersonation capability
             // just by failing to login. See ApiTokenFilter that does the following, which seems better:
             /*
                 try {
-                    Jenkins.getInstance().getSecurityRealm().loadUserByUsername(username);
+                    Jenkins.get().getSecurityRealm().loadUserByUsername(username);
                 } catch (UserMayOrMayNotExistException x) {
                     // OK, give them the benefit of the doubt.
                 } catch (UsernameNotFoundException x) {
@@ -152,6 +167,7 @@ public class LastGrantedAuthoritiesProperty extends UserProperty {
             return false;
         }
         
+        @Override
         public UserProperty newInstance(User user) {
             return null;
         }

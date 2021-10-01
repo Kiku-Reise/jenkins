@@ -23,28 +23,23 @@
  */
 package hudson.tasks;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.AbortException;
 import hudson.FilePath;
-import hudson.model.Build;
-import hudson.model.BuildListener;
-import hudson.model.Action;
-import hudson.model.Project;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
-import hudson.util.ReflectionUtils;
 import hudson.Launcher;
 import hudson.Util;
-
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.util.Collection;
-import java.util.Collections;
-
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
+import hudson.model.Action;
+import hudson.model.Build;
+import hudson.model.BuildListener;
+import hudson.model.Project;
 import hudson.model.Run;
 import hudson.model.TaskListener;
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 import jenkins.tasks.SimpleBuildStep;
-
-import javax.annotation.Nonnull;
 
 /**
  * Provides compatibility with {@link BuildStep} before 1.150
@@ -59,6 +54,7 @@ public abstract class BuildStepCompatibilityLayer implements BuildStep {
 //
 // new definitions >= 1.150
 //
+    @Override
     public boolean prebuild(AbstractBuild<?,?> build, BuildListener listener) {
         if (build instanceof Build)
             return prebuild((Build)build,listener);
@@ -67,18 +63,22 @@ public abstract class BuildStepCompatibilityLayer implements BuildStep {
     }
 
     /**
-     * {@inheritDoc}
      * @return Delegates to {@link SimpleBuildStep#perform(Run, FilePath, Launcher, TaskListener)} if possible, always returning true or throwing an error.
      */
     @Override
     public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
         if (this instanceof SimpleBuildStep) {
             // delegate to the overloaded version defined in SimpleBuildStep
-            FilePath workspace = build.getWorkspace();
-            if (workspace == null) {
+            final SimpleBuildStep step = (SimpleBuildStep) this;
+            final FilePath workspace = build.getWorkspace();
+            if (step.requiresWorkspace() && workspace == null) {
                 throw new AbortException("no workspace for " + build);
             }
-            ((SimpleBuildStep) this).perform(build, workspace, launcher, listener);
+            if (workspace != null) { // if we have one, provide it regardless of whether it's _required_
+                step.perform(build, workspace, build.getEnvironment(listener), launcher, listener);
+            } else {
+                step.perform(build, build.getEnvironment(listener), listener);
+            }
             return true;
         } else if (build instanceof Build) {
             // delegate to the legacy signature deprecated in 1.312
@@ -88,6 +88,7 @@ public abstract class BuildStepCompatibilityLayer implements BuildStep {
         }
     }
 
+    @Override
     public Action getProjectAction(AbstractProject<?, ?> project) {
         if (project instanceof Project)
             return getProjectAction((Project) project);
@@ -95,7 +96,8 @@ public abstract class BuildStepCompatibilityLayer implements BuildStep {
             return null;
     }
 
-    @Nonnull
+    @Override
+    @NonNull
     public Collection<? extends Action> getProjectActions(AbstractProject<?, ?> project) {
         // delegate to getJobAction (singular) for backward compatible behavior
         Action a = getProjectAction(project);
@@ -123,7 +125,7 @@ public abstract class BuildStepCompatibilityLayer implements BuildStep {
     @Deprecated
     public boolean perform(Build<?, ?> build, Launcher launcher, BuildListener listener)
             throws InterruptedException, IOException {       
-        if (build instanceof AbstractBuild && Util.isOverridden(BuildStepCompatibilityLayer.class, this.getClass(),
+        if (build != null && Util.isOverridden(BuildStepCompatibilityLayer.class, this.getClass(),
                 "perform", AbstractBuild.class, Launcher.class, BuildListener.class)) {
             return perform((AbstractBuild<?, ?>) build, launcher, listener);
         }

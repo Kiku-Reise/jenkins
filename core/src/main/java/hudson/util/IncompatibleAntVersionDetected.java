@@ -24,7 +24,6 @@
 package hudson.util;
 
 import hudson.remoting.Which;
-
 import java.io.IOException;
 import java.net.URL;
 
@@ -54,6 +53,6 @@ public class IncompatibleAntVersionDetected extends BootFailure {
     }
 
     public URL getWhereAntIsLoaded() throws IOException {
-        return Which.jarURL(antClass);
+        return Which.classFileUrl(antClass);
     }
 }

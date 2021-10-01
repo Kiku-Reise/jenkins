@@ -23,17 +23,16 @@
  */
 package hudson.model;
 
+import static hudson.model.UpdateCenter.ConnectionStatus;
+
+import java.io.IOException;
+import java.net.UnknownHostException;
 import net.sf.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.xml.sax.SAXException;
-
-import java.io.IOException;
-import java.net.UnknownHostException;
-
-import static hudson.model.UpdateCenter.ConnectionStatus;
 
 /**
  * @author <a href="mailto:tom.fennelly@gmail.com">tom.fennelly@gmail.com</a>
@@ -124,7 +123,7 @@ public class UpdateCenterConnectionStatusTest {
         Assert.assertEquals(ConnectionStatus.FAILED, job.connectionStates.get(ConnectionStatus.UPDATE_SITE));
     }
 
-    private class TestConfig extends UpdateCenter.UpdateCenterConfiguration {
+    private static class TestConfig extends UpdateCenter.UpdateCenterConfiguration {
 
         private IOException checkConnectionException;
         private IOException checkUpdateCenterException;

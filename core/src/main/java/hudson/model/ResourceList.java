@@ -23,13 +23,12 @@
  */
 package hudson.model;
 
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Map.Entry;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 /**
@@ -52,7 +51,7 @@ public final class ResourceList {
     /**
      * All resources (R/W.)
      */
-    private final Set<Resource> all = new HashSet<Resource>();
+    private final Set<Resource> all = new HashSet<>();
 
     /**
      * Write accesses. Values are the # of write counts that this list uses.
@@ -60,7 +59,7 @@ public final class ResourceList {
      * The values are mostly supposed to be 1, but when {@link ResourceController}
      * uses a list to keep track of the union of all the activities, it can get larger.
      */
-    private final Map<Resource,Integer> write = new HashMap<Resource,Integer>();
+    private final Map<Resource,Integer> write = new HashMap<>();
     private static final Integer MAX_INT = Integer.MAX_VALUE;
 
     /**
@@ -83,7 +82,7 @@ public final class ResourceList {
             ResourceList r = new ResourceList();
             for (ResourceList l : lists) {
                 r.all.addAll(l.all);
-                for (Entry<Resource, Integer> e : l.write.entrySet())
+                for (Map.Entry<Resource, Integer> e : l.write.entrySet())
                     r.write.put(e.getKey(), unbox(r.write.get(e.getKey()))+e.getValue());
             }
             return r;
@@ -125,7 +124,7 @@ public final class ResourceList {
     }
 
     private Resource _getConflict(ResourceList lhs, ResourceList rhs) {
-        for (Entry<Resource,Integer> r : lhs.write.entrySet()) {
+        for (Map.Entry<Resource,Integer> r : lhs.write.entrySet()) {
             for (Resource l : rhs.all) {
                 Integer v = rhs.write.get(l);
                 if(v!=null) // this is write/write conflict.
@@ -143,10 +142,10 @@ public final class ResourceList {
 
     @Override
     public String toString() {
-        Map<Resource,String> m = new HashMap<Resource,String>();
+        Map<Resource,String> m = new HashMap<>();
         for (Resource r : all)
             m.put(r,"R");
-        for (Entry<Resource,Integer> e : write.entrySet())
+        for (Map.Entry<Resource,Integer> e : write.entrySet())
             m.put(e.getKey(),"W"+e.getValue());
         return m.toString();
     }

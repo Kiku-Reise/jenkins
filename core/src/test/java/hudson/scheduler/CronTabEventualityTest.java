@@ -1,26 +1,25 @@
 package hudson.scheduler;
 
+import static org.junit.Assert.fail;
+
 import antlr.ANTLRException;
-import static org.junit.Assert.*;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.jvnet.hudson.test.Issue;
-import org.jvnet.hudson.test.For;
-
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.GregorianCalendar;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.jvnet.hudson.test.For;
+import org.jvnet.hudson.test.Issue;
 
 @RunWith(Parameterized.class)
 @For({CronTab.class, Hash.class})
 public class CronTabEventualityTest {
     @Parameterized.Parameters
     public static Collection<Object[]> parameters() {
-        Collection<Object[]> parameters = new ArrayList<Object[]>();
+        Collection<Object[]> parameters = new ArrayList<>();
         parameters.add(new Object[]{"zero", Hash.zero()});
         parameters.add(new Object[]{"seed1", Hash.from("seed1")});
         parameters.add(new Object[]{"seed2", Hash.from("seed2")});

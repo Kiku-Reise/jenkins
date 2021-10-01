@@ -24,20 +24,22 @@
 
 package hudson.model;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import hudson.FilePath;
 import hudson.remoting.VirtualChannel;
 import hudson.scm.NullSCM;
 import hudson.slaves.DumbSlave;
 import hudson.slaves.WorkspaceList;
 import hudson.util.StreamTaskListener;
-
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
-
 import jenkins.MasterToSlaveFileCallable;
-import static org.junit.Assert.*;
-
 import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
@@ -135,7 +137,7 @@ public class WorkspaceCleanupThreadTest {
         FilePath ws = createOldWorkspaceOn(r.jenkins, p);
         createOldWorkspaceOn(r.createOnlineSlave(), p);
 
-        long twoDaysOld = System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000;
+        long twoDaysOld = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(2);
         ws.act(new Touch(twoDaysOld));
 
         WorkspaceCleanupThread.retainForDays = 3;
@@ -151,7 +153,7 @@ public class WorkspaceCleanupThreadTest {
 
     @Test @WithoutJenkins public void recurrencePeriodIsInHours() {
         assertEquals(
-                WorkspaceCleanupThread.recurrencePeriodHours * 60 * 60 * 1000 ,
+                TimeUnit.HOURS.toMillis(WorkspaceCleanupThread.recurrencePeriodHours),
                 new WorkspaceCleanupThread().getRecurrencePeriod()
         );
     }
@@ -201,7 +203,7 @@ public class WorkspaceCleanupThreadTest {
 
     private static final class VetoSCM extends NullSCM {
         private final boolean answer;
-        public VetoSCM(boolean answer) {
+        VetoSCM(boolean answer) {
             this.answer = answer;
         }
 
@@ -217,7 +219,7 @@ public class WorkspaceCleanupThreadTest {
         private static final long serialVersionUID = 1L;
         private final long time;
 
-        public Touch(long time) {
+        Touch(long time) {
             this.time = time;
         }
 

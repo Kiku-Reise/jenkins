@@ -24,6 +24,7 @@
 
 package hudson.tools;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.model.Descriptor;
 import hudson.util.DescribableList;
@@ -35,7 +36,6 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
-
 import jenkins.model.GlobalConfigurationCategory;
 import jenkins.model.Jenkins;
 import jenkins.tools.ToolConfigurationCategory;
@@ -43,8 +43,6 @@ import net.sf.json.JSONObject;
 import org.jvnet.tiger_types.Types;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
-
-import javax.annotation.Nonnull;
 
 /**
  * {@link Descriptor} for {@link ToolInstallation}.
@@ -116,7 +114,7 @@ public abstract class ToolDescriptor<T extends ToolInstallation> extends Descrip
 
 
     @Override
-    public @Nonnull GlobalConfigurationCategory getCategory() {
+    public @NonNull GlobalConfigurationCategory getCategory() {
         return GlobalConfigurationCategory.get(ToolConfigurationCategory.class);
     }
 
@@ -136,7 +134,7 @@ public abstract class ToolDescriptor<T extends ToolInstallation> extends Descrip
      */
     public DescribableList<ToolProperty<?>,ToolPropertyDescriptor> getDefaultProperties() throws IOException {
         DescribableList<ToolProperty<?>,ToolPropertyDescriptor> r
-                = new DescribableList<ToolProperty<?>, ToolPropertyDescriptor>(NOOP);
+                = new DescribableList<>(NOOP);
 
         List<? extends ToolInstaller> installers = getDefaultInstallers();
         if(!installers.isEmpty())
@@ -158,7 +156,7 @@ public abstract class ToolDescriptor<T extends ToolInstallation> extends Descrip
      */
     public FormValidation doCheckHome(@QueryParameter File value) {
         // this can be used to check the existence of a file on the server, so needs to be protected
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
         if (value.getPath().isEmpty()) {
             return FormValidation.ok();
@@ -173,7 +171,7 @@ public abstract class ToolDescriptor<T extends ToolInstallation> extends Descrip
 
     /**
      * May be overridden to provide tool-specific validation of a tool home directory.
-     * @param home a possible value for {@link ToolInstallation#getHome}, known to already exist on the master
+     * @param home a possible value for {@link ToolInstallation#getHome}, known to already exist on the controller TODO(terminology) or is it built-in?
      * @return by default, {@link FormValidation#ok()}
      * @since 1.563
      */

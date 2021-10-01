@@ -23,28 +23,26 @@
  */
 package hudson;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.remoting.VirtualChannel;
-import hudson.util.CaseInsensitiveComparator;
 import hudson.util.CyclicGraphDetector;
 import hudson.util.CyclicGraphDetector.CycleDetectedException;
 import hudson.util.VariableResolver;
-import jenkins.security.MasterToSlaveCallable;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.Arrays;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
-import javax.annotation.CheckForNull;
+import jenkins.security.MasterToSlaveCallable;
 
 /**
  * Environment variables.
@@ -65,7 +63,7 @@ import javax.annotation.CheckForNull;
  *
  * <p>
  * In Jenkins, often we need to build up "environment variable overrides"
- * on master, then to execute the process on agents. This causes a problem
+ * on the controller, then to execute the process on agents. This causes a problem
  * when working with variables like {@code PATH}. So to make this work,
  * we introduce a special convention {@code PATH+FOO} &mdash; all entries
  * that starts with {@code PATH+} are merged and prepended to the inherited
@@ -101,14 +99,14 @@ public class EnvVars extends TreeMap<String,String> {
      * @since 2.144
      * @param platform the platform to set.
      */
-    public void setPlatform(@Nonnull Platform platform) {
+    public void setPlatform(@NonNull Platform platform) {
         this.platform = platform;
     }
     public EnvVars() {
-        super(CaseInsensitiveComparator.INSTANCE);
+        super(String.CASE_INSENSITIVE_ORDER);
     }
 
-    public EnvVars(@Nonnull Map<String,String> m) {
+    public EnvVars(@NonNull Map<String,String> m) {
         this();
         putAll(m);
 
@@ -120,7 +118,8 @@ public class EnvVars extends TreeMap<String,String> {
         }
     }
 
-    public EnvVars(@Nonnull EnvVars m) {
+    @SuppressWarnings("CopyConstructorMissesField") // does not set #platform, see its Javadoc
+    public EnvVars(@NonNull EnvVars m) {
         // this constructor is so that in future we can get rid of the downcasting.
         this((Map)m);
     }
@@ -155,7 +154,7 @@ public class EnvVars extends TreeMap<String,String> {
             if(v==null) v=value;
             else {
                 // we might be handling environment variables for a agent that can have different path separator
-                // than the master, so the following is an attempt to get it right.
+                // than the controller, so the following is an attempt to get it right.
                 // it's still more error prone that I'd like.
                 char ch = platform==null ? File.pathSeparatorChar : platform.pathSeparator;
                 v=value+ch+v;
@@ -194,15 +193,16 @@ public class EnvVars extends TreeMap<String,String> {
             private final Comparator<? super String> comparator;
             public Set<String> referredVariables;
             
-            public TraceResolver(Comparator<? super String> comparator) {
+            TraceResolver(Comparator<? super String> comparator) {
                 this.comparator = comparator;
                 clear();
             }
             
             public void clear() {
-                referredVariables = new TreeSet<String>(comparator);
+                referredVariables = new TreeSet<>(comparator);
             }
             
+            @Override
             public String resolve(String name) {
                 referredVariables.add(name);
                 return "";
@@ -213,7 +213,7 @@ public class EnvVars extends TreeMap<String,String> {
             // map from a variable to a set of variables that variable refers.
             private final Map<String, Set<String>> refereeSetMap;
             
-            public VariableReferenceSorter(Map<String, Set<String>> refereeSetMap) {
+            VariableReferenceSorter(Map<String, Set<String>> refereeSetMap) {
                 this.refereeSetMap = refereeSetMap;
             }
             
@@ -230,15 +230,15 @@ public class EnvVars extends TreeMap<String,String> {
 
         private final Comparator<? super String> comparator;
         
-        @Nonnull
+        @NonNull
         private final EnvVars target;
-        @Nonnull
+        @NonNull
         private final Map<String,String> overrides;
         
         private Map<String, Set<String>> refereeSetMap;
         private List<String> orderedVariableNames;
         
-        public OverrideOrderCalculator(@Nonnull EnvVars target, @Nonnull Map<String,String> overrides) {
+        OverrideOrderCalculator(@NonNull EnvVars target, @NonNull Map<String,String> overrides) {
             comparator = target.comparator();
             this.target = target;
             this.overrides = overrides;
@@ -255,11 +255,11 @@ public class EnvVars extends TreeMap<String,String> {
             // This should not be negative, for the first and last one is same.
             int refererIndex = cycle.lastIndexOf(referee) - 1;
             
-            assert(refererIndex >= 0);
+            assert refererIndex >= 0;
             String referrer = cycle.get(refererIndex);
             boolean removed = refereeSetMap.get(referrer).remove(referee);
-            assert(removed);
-            LOGGER.warning(String.format("Cyclic reference detected: %s", Util.join(cycle," -> ")));
+            assert removed;
+            LOGGER.warning(String.format("Cyclic reference detected: %s", String.join(" -> ", cycle)));
             LOGGER.warning(String.format("Cut the reference %s -> %s", referrer, referee));
         }
         
@@ -288,8 +288,8 @@ public class EnvVars extends TreeMap<String,String> {
          * Scan all variables and list all referring variables.
          */
         public void scan() {
-            refereeSetMap = new TreeMap<String, Set<String>>(comparator);
-            List<String> extendingVariableNames = new ArrayList<String>();
+            refereeSetMap = new TreeMap<>(comparator);
+            List<String> extendingVariableNames = new ArrayList<>();
             
             TraceResolver resolver = new TraceResolver(comparator);
             
@@ -327,10 +327,10 @@ public class EnvVars extends TreeMap<String,String> {
             
             // When A refers B, the last appearance of B always comes after
             // the last appearance of A.
-            List<String> reversedDuplicatedOrder = new ArrayList<String>(sorter.getSorted());
+            List<String> reversedDuplicatedOrder = new ArrayList<>(sorter.getSorted());
             Collections.reverse(reversedDuplicatedOrder);
             
-            orderedVariableNames = new ArrayList<String>(overrides.size());
+            orderedVariableNames = new ArrayList<>(overrides.size());
             for(String key: reversedDuplicatedOrder) {
                 if(overrides.containsKey(key) && !orderedVariableNames.contains(key)) {
                     orderedVariableNames.add(key);
@@ -347,7 +347,7 @@ public class EnvVars extends TreeMap<String,String> {
      * See {@link #override(String, String)}.
      * @return {@code this}
      */
-    public EnvVars overrideExpandingAll(@Nonnull Map<String,String> all) {
+    public EnvVars overrideExpandingAll(@NonNull Map<String,String> all) {
         for (String key : new OverrideOrderCalculator(this, all).getOrderedVariableNames()) {
             override(key, expand(all.get(key)));
         }
@@ -387,6 +387,15 @@ public class EnvVars extends TreeMap<String,String> {
         if (value!=null)
             put(key,value);
     }
+
+    /**
+     * Add entire map but filter null values out.
+     * @since 2.214
+     */
+    public void putAllNonNull(Map<String, String> map) {
+        map.forEach(this::putIfNotNull);
+    }
+
     
     /**
      * Takes a string that looks like "a=b" and adds that to this map.
@@ -428,6 +437,7 @@ public class EnvVars extends TreeMap<String,String> {
     }
 
     private static final class GetEnvVars extends MasterToSlaveCallable<EnvVars,RuntimeException> {
+        @Override
         public EnvVars call() {
             return new EnvVars(EnvVars.masterEnvVars);
         }
@@ -439,8 +449,8 @@ public class EnvVars extends TreeMap<String,String> {
      *
      * <p>
      * Despite what the name might imply, this is the environment variable
-     * of the current JVM process. And therefore, it is Jenkins master's environment
-     * variables only when you access this from the master.
+     * of the current JVM process. And therefore, it is the Jenkins controller's
+     * environment variables only when you access this from the controller.
      *
      * <p>
      * If you access this field from agents, then this is the environment

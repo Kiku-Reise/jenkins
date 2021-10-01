@@ -29,14 +29,8 @@ import hudson.ExtensionList;
 import hudson.PluginWrapper;
 import hudson.model.AdministrativeMonitor;
 import hudson.model.UpdateSite;
+import hudson.security.Permission;
 import hudson.util.HttpResponses;
-import jenkins.model.Jenkins;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.interceptor.RequirePOST;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,7 +38,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+import jenkins.model.Jenkins;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
  * Administrative monitor showing plugin/core warnings published by the configured update site to the user.
@@ -82,7 +81,15 @@ import java.util.Set;
 public class UpdateSiteWarningsMonitor extends AdministrativeMonitor {
     @Override
     public boolean isActivated() {
+        if (!Jenkins.get().getUpdateCenter().isSiteDataReady()) {
+            return false;
+        }
         return !getActiveCoreWarnings().isEmpty() || !getActivePluginWarningsByPlugin().isEmpty();
+    }
+
+    @Override
+    public boolean isSecurity() {
+        return true;
     }
 
     public List<UpdateSite.Warning> getActiveCoreWarnings() {
@@ -109,10 +116,10 @@ public class UpdateSiteWarningsMonitor extends AdministrativeMonitor {
 
             String pluginName = warning.component;
 
-            PluginWrapper plugin = Jenkins.getInstance().getPluginManager().getPlugin(pluginName);
+            PluginWrapper plugin = Jenkins.get().getPluginManager().getPlugin(pluginName);
 
             if (!activePluginWarningsByPlugin.containsKey(plugin)) {
-                activePluginWarningsByPlugin.put(plugin, new ArrayList<UpdateSite.Warning>());
+                activePluginWarningsByPlugin.put(plugin, new ArrayList<>());
             }
             activePluginWarningsByPlugin.get(plugin).add(warning);
         }
@@ -138,6 +145,7 @@ public class UpdateSiteWarningsMonitor extends AdministrativeMonitor {
      */
     @RequirePOST
     public HttpResponse doForward(@QueryParameter String fix, @QueryParameter String configure) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         if (fix != null) {
             return HttpResponses.redirectViaContextPath("pluginManager");
         }
@@ -157,6 +165,11 @@ public class UpdateSiteWarningsMonitor extends AdministrativeMonitor {
     public boolean hasApplicableHiddenWarnings() {
         UpdateSiteWarningsConfiguration configuration = ExtensionList.lookupSingleton(UpdateSiteWarningsConfiguration.class);
         return getActiveWarnings().size() < configuration.getApplicableWarnings().size();
+    }
+
+    @Override
+    public Permission getRequiredPermission() {
+        return Jenkins.SYSTEM_READ;
     }
 
     @Override

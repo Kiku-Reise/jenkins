@@ -1,18 +1,19 @@
 package jenkins.security.s2m;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
+import static hudson.Functions.isWindows;
+
 import hudson.Functions;
 import hudson.model.Failure;
-import jenkins.model.Jenkins;
-
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static hudson.Functions.isWindows;
+import jenkins.model.Jenkins;
 
 /**
  * Config file that lists {@link FilePathRule} rules.
@@ -26,12 +27,12 @@ class FilePathRuleConfig extends ConfigDirectory<FilePathRule,List<FilePathRule>
 
     @Override
     protected List<FilePathRule> create() {
-        return new ArrayList<FilePathRule>();
+        return new ArrayList<>();
     }
 
     @Override
     protected List<FilePathRule> readOnly(List<FilePathRule> base) {
-        return ImmutableList.copyOf(base);
+        return Collections.unmodifiableList(new ArrayList<>(base));
     }
 
     @Override
@@ -42,7 +43,7 @@ class FilePathRuleConfig extends ConfigDirectory<FilePathRule,List<FilePathRule>
         line = line.replace("<BUILDDIR>","<JOBDIR>/builds/<BUILDID>");
         line = line.replace("<BUILDID>","(?:[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]|[0-9]+)");
         line = line.replace("<JOBDIR>","<JENKINS_HOME>/jobs/.+");
-        line = line.replace("<JENKINS_HOME>","\\Q"+Jenkins.getInstance().getRootDir().getPath()+"\\E");
+        line = line.replace("<JENKINS_HOME>","\\Q"+Jenkins.get().getRootDir().getPath()+"\\E");
 
         // config file is always /-separated even on Windows, so bring it back to \-separation.
         // This is done in the context of regex, so it has to be \\, which means in the source code it is \\\\
@@ -66,13 +67,8 @@ class FilePathRuleConfig extends ConfigDirectory<FilePathRule,List<FilePathRule>
         if (token.equals("all"))
             return OpMatcher.ALL;
 
-        final ImmutableSet ops = ImmutableSet.copyOf(token.split(","));
-        return new OpMatcher() {
-            @Override
-            public boolean matches(String op) {
-                return ops.contains(op);
-            }
-        };
+        final Set<String> ops = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(token.split(","))));
+        return ops::contains;
     }
 
     public boolean checkFileAccess(String op, File path) throws SecurityException {

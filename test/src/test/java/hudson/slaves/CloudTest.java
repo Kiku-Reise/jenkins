@@ -1,36 +1,34 @@
 package hudson.slaves;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.iterableWithSize;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-import com.gargoylesoftware.htmlunit.Page;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.Action;
 import hudson.model.Computer;
 import hudson.model.Label;
 import hudson.security.Permission;
 import hudson.security.SidACL;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import jenkins.model.Jenkins;
 import jenkins.model.TransientActionFactory;
 import org.acegisecurity.acls.sid.Sid;
-import org.apache.tools.ant.taskdefs.Javadoc;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.TestExtension;
 import org.jvnet.hudson.test.WithoutJenkins;
-import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.StaplerResponse;
-
-import javax.annotation.Nonnull;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 
 public class CloudTest {
 
@@ -44,8 +42,8 @@ public class CloudTest {
             }
         };
 
-        assertTrue(acl.hasPermission(Jenkins.ANONYMOUS, Cloud.PROVISION));
-        assertFalse(acl.hasPermission(Jenkins.ANONYMOUS, Jenkins.ADMINISTER));
+        assertTrue(acl.hasPermission2(Jenkins.ANONYMOUS2, Cloud.PROVISION));
+        assertFalse(acl.hasPermission2(Jenkins.ANONYMOUS2, Jenkins.ADMINISTER));
         assertEquals(Cloud.PROVISION, Computer.PERMISSIONS.find("Provision"));
     }
 
@@ -102,7 +100,7 @@ public class CloudTest {
             return Cloud.class;
         }
 
-        @Nonnull @Override public Collection<? extends Action> createFor(@Nonnull Cloud target) {
+        @NonNull @Override public Collection<? extends Action> createFor(@NonNull Cloud target) {
             return Arrays.asList(new TaskCloudAction(), new ReportingCloudAction());
         }
     }

@@ -27,25 +27,23 @@ import com.thoughtworks.xstream.converters.MarshallingContext;
 import com.thoughtworks.xstream.converters.UnmarshallingContext;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.Nullable;
 import hudson.BulkChange;
 import hudson.CopyOnWrite;
 import hudson.XmlFile;
 import hudson.model.Action;
 import hudson.model.Descriptor.FormException;
 import hudson.model.Failure;
-import hudson.util.*;
-import jenkins.model.Jenkins;
 import hudson.model.Label;
 import hudson.model.Saveable;
 import hudson.model.listeners.SaveableListener;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.DoNotUse;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.interceptor.RequirePOST;
-
-import javax.servlet.ServletException;
+import hudson.util.DescribableList;
+import hudson.util.EditDistance;
+import hudson.util.FormApply;
+import hudson.util.QuotedStringTokenizer;
+import hudson.util.VariableResolver;
+import hudson.util.XStream2;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,8 +53,17 @@ import java.util.Set;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nullable;
+import java.util.regex.Pattern;
+import javax.servlet.ServletException;
+import jenkins.model.Jenkins;
+import jenkins.util.SystemProperties;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.DoNotUse;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.interceptor.RequirePOST;
+import org.kohsuke.stapler.verb.POST;
 
 /**
  * Atomic single token label, like "foo" or "bar".
@@ -65,11 +72,17 @@ import javax.annotation.Nullable;
  * @since  1.372
  */
 public class LabelAtom extends Label implements Saveable {
+
+    private static final Pattern PROHIBITED_DOUBLE_DOT = Pattern.compile(".*\\.\\.[\\\\/].*");
+
+    private static /* Script Console modifiable */ boolean ALLOW_FOLDER_TRAVERSAL =
+            SystemProperties.getBoolean(LabelAtom.class.getName() + ".allowFolderTraversal");
+
     private DescribableList<LabelAtomProperty,LabelAtomPropertyDescriptor> properties =
-            new DescribableList<LabelAtomProperty,LabelAtomPropertyDescriptor>(this);
+            new DescribableList<>(this);
 
     @CopyOnWrite
-    protected transient volatile List<Action> transientActions = new Vector<Action>();
+    protected transient volatile List<Action> transientActions = new Vector<>();
 
     private String description;
 
@@ -100,7 +113,7 @@ public class LabelAtom extends Label implements Saveable {
     @Override
     public List<Action> getActions() {
         // add all the transient actions, too
-        List<Action> actions = new Vector<Action>(super.getActions());
+        List<Action> actions = new Vector<>(super.getActions());
         actions.addAll(transientActions);
         // return the read only list to cause a failure on plugins who try to add an action here
         return Collections.unmodifiableList(actions);
@@ -109,7 +122,7 @@ public class LabelAtom extends Label implements Saveable {
     // TODO implement addAction, addOrReplaceAction, removeAction, removeActions, replaceActions
 
     protected void updateTransientActions() {
-        Vector<Action> ta = new Vector<Action>();
+        Vector<Action> ta = new Vector<>();
 
         for (LabelAtomProperty p : properties)
             ta.addAll(p.getActions(this));
@@ -120,6 +133,7 @@ public class LabelAtom extends Label implements Saveable {
     /**
      * @since 1.580
      */
+    @Override
     public String getDescription() {
         return description;
     }
@@ -162,10 +176,14 @@ public class LabelAtom extends Label implements Saveable {
     }
 
     /*package*/ XmlFile getConfigFile() {
-        return new XmlFile(XSTREAM, new File(Jenkins.getInstance().root, "labels/"+name+".xml"));
+        return new XmlFile(XSTREAM, new File(Jenkins.get().root, "labels/"+name+".xml"));
     }
 
+    @Override
     public void save() throws IOException {
+        if (isInvalidName()) {
+            throw new IOException("Invalid label");
+        }
         if(BulkChange.contains(this))   return;
         try {
             getConfigFile().write(this);
@@ -199,11 +217,15 @@ public class LabelAtom extends Label implements Saveable {
     /**
      * Accepts the update to the node configuration.
      */
-    @RequirePOST
+    @POST
     public void doConfigSubmit( StaplerRequest req, StaplerResponse rsp ) throws IOException, ServletException, FormException {
-        final Jenkins app = Jenkins.getInstance();
+        final Jenkins app = Jenkins.get();
 
         app.checkPermission(Jenkins.ADMINISTER);
+
+        if (isInvalidName()) {
+            throw new FormException("Invalid label", null);
+        }
 
         properties.rebuild(req, req.getSubmittedForm(), getApplicablePropertyDescriptors());
 
@@ -215,13 +237,17 @@ public class LabelAtom extends Label implements Saveable {
         FormApply.success(".").generateResponse(req, rsp, null);
     }
 
+    private boolean isInvalidName() {
+        return !ALLOW_FOLDER_TRAVERSAL && PROHIBITED_DOUBLE_DOT.matcher(name).matches();
+    }
+
     /**
      * Accepts the new description.
      */
     @RequirePOST
     @Restricted(DoNotUse.class)
     public synchronized void doSubmitDescription( StaplerRequest req, StaplerResponse rsp ) throws IOException, ServletException {
-        Jenkins.getInstance().checkPermission(Jenkins.ADMINISTER);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
         setDescription(req.getParameter("description"));
         rsp.sendRedirect(".");  // go to the top page
@@ -232,12 +258,12 @@ public class LabelAtom extends Label implements Saveable {
      * @see Jenkins#getLabelAtom
      */
     public static @Nullable LabelAtom get(@CheckForNull String l) {
-        return Jenkins.getInstance().getLabelAtom(l);
+        return Jenkins.get().getLabelAtom(l);
     }
 
     public static LabelAtom findNearest(String name) {
-        List<String> candidates = new ArrayList<String>();
-        for (LabelAtom a : Jenkins.getInstance().getLabelAtoms()) {
+        List<String> candidates = new ArrayList<>();
+        for (LabelAtom a : Jenkins.get().getLabelAtoms()) {
             candidates.add(a.getName());
         }
         return get(EditDistance.findNearest(name, candidates));
@@ -281,10 +307,12 @@ public class LabelAtom extends Label implements Saveable {
             super(XSTREAM);
         }
 
+        @Override
         public boolean canConvert(Class type) {
             return LabelAtom.class.isAssignableFrom(type);
         }
 
+        @Override
         public void marshal(Object source, HierarchicalStreamWriter writer, MarshallingContext context) {
             if (context.get(IN_NESTED)==null) {
                 context.put(IN_NESTED,true);
@@ -297,6 +325,7 @@ public class LabelAtom extends Label implements Saveable {
                 leafLabelConverter.marshal(source,writer,context);
         }
 
+        @Override
         public Object unmarshal(HierarchicalStreamReader reader, UnmarshallingContext context) {
             if (context.get(IN_NESTED)==null) {
                 context.put(IN_NESTED,true);

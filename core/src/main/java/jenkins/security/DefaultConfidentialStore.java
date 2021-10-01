@@ -4,21 +4,20 @@ import hudson.FilePath;
 import hudson.Util;
 import hudson.util.Secret;
 import hudson.util.TextFile;
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
-import jenkins.model.Jenkins;
-
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.SecretKey;
-import java.io.File;
-import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
-import javax.crypto.BadPaddingException;
+import jenkins.model.Jenkins;
 import org.apache.commons.io.IOUtils;
 
 /**
@@ -48,7 +47,7 @@ public class DefaultConfidentialStore extends ConfidentialStore {
     private final SecretKey masterKey;
 
     public DefaultConfidentialStore() throws IOException, InterruptedException {
-        this(new File(Jenkins.getInstance().getRootDir(),"secrets"));
+        this(new File(Jenkins.get().getRootDir(),"secrets"));
     }
 
     public DefaultConfidentialStore(File rootDir) throws IOException, InterruptedException {
@@ -140,6 +139,12 @@ public class DefaultConfidentialStore extends ConfidentialStore {
         return new File(rootDir, key.getId());
     }
 
+    @Override
+    SecureRandom secureRandom() {
+        return sr;
+    }
+
+    @Override
     public byte[] randomBytes(int size) {
         byte[] random = new byte[size];
         sr.nextBytes(random);

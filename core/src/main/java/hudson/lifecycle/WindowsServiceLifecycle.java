@@ -23,24 +23,23 @@
  */
 package hudson.lifecycle;
 
-import hudson.FilePath;
-import hudson.Launcher.LocalLauncher;
-import hudson.Util;
-import jenkins.model.Jenkins;
-import hudson.util.StreamTaskListener;
-import hudson.util.jna.Kernel32;
 import static hudson.util.jna.Kernel32.MOVEFILE_DELAY_UNTIL_REBOOT;
 import static hudson.util.jna.Kernel32.MOVEFILE_REPLACE_EXISTING;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.output.ByteArrayOutputStream;
-
+import hudson.FilePath;
+import hudson.Launcher.LocalLauncher;
+import hudson.Util;
+import hudson.util.StreamTaskListener;
+import hudson.util.jna.Kernel32;
 import java.io.File;
-import java.io.IOException;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.output.ByteArrayOutputStream;
 
 /**
  * {@link Lifecycle} for Hudson installed as Windows service.
@@ -153,7 +152,7 @@ public class WindowsServiceLifecycle extends Lifecycle {
             baseDir = new File(baseEnv);
         } else {
             LOGGER.log(Level.WARNING, "Could not find environment variable 'BASE' for Jenkins base directory. Falling back to JENKINS_HOME");
-            baseDir = Jenkins.getInstance().getRootDir();
+            baseDir = Jenkins.get().getRootDir();
         }
         return baseDir;
     }

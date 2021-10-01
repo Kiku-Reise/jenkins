@@ -44,21 +44,24 @@ public final class WeakLogHandler extends Handler {
     public WeakLogHandler(Handler target, Logger logger) {
         this.logger = logger;
         logger.addHandler(this);
-        this.target = new WeakReference<Handler>(target);
+        this.target = new WeakReference<>(target);
     }
 
+    @Override
     public void publish(LogRecord record) {
         Handler t = resolve();
         if(t!=null)
             t.publish(record);
     }
 
+    @Override
     public void flush() {
         Handler t = resolve();
         if(t!=null)
             t.flush();
     }
 
+    @Override
     public void close() throws SecurityException {
         Handler t = resolve();
         if(t!=null)

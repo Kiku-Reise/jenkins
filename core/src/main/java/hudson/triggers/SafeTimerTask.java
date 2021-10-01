@@ -28,17 +28,14 @@ import hudson.model.AsyncAperiodicWork;
 import hudson.model.AsyncPeriodicWork;
 import hudson.model.PeriodicWork;
 import hudson.security.ACL;
-
+import hudson.security.ACLContext;
 import java.io.File;
 import java.util.TimerTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
 import jenkins.util.Timer;
-import org.acegisecurity.context.SecurityContext;
-import org.acegisecurity.context.SecurityContextHolder;
 
 /**
  * Wrapper so that a fatal error in {@link TimerTask} will not terminate the timer.
@@ -50,6 +47,27 @@ import org.acegisecurity.context.SecurityContextHolder;
  * @since 1.124
  */
 public abstract class SafeTimerTask extends TimerTask {
+
+    /**
+     * Lambda-friendly means of creating a task.
+     * @since 2.216
+     */
+    public static SafeTimerTask of(ExceptionRunnable r) {
+        return new SafeTimerTask() {
+            @Override
+            protected void doRun() throws Exception {
+                r.run();
+            }
+        };
+    }
+    /**
+     * @see #of
+     * @since 2.216
+     */
+    @FunctionalInterface
+    public interface ExceptionRunnable {
+        void run() throws Exception;
+    }
 
     /**
      * System property to change the location where (tasks) logging should be sent.
@@ -64,16 +82,14 @@ public abstract class SafeTimerTask extends TimerTask {
      */
     private static boolean ALREADY_LOGGED = false;
 
+    @Override
     public final void run() {
         // background activity gets system credential,
         // just like executors get it.
-        SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
-        try {
+        try (ACLContext ctx = ACL.as2(ACL.SYSTEM2)) {
             doRun();
         } catch(Throwable t) {
             LOGGER.log(Level.SEVERE, "Timer task "+this+" failed",t);
-        } finally {
-            SecurityContextHolder.setContext(oldContext);
         }
     }
 

@@ -23,6 +23,10 @@
  */
 package jenkins.model.lazy;
 
+import static jenkins.model.lazy.AbstractLazyLoadRunMap.Direction.ASC;
+import static jenkins.model.lazy.AbstractLazyLoadRunMap.Direction.DESC;
+
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.model.Job;
 import hudson.model.Run;
 import hudson.model.RunMap;
@@ -39,14 +43,9 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.CheckForNull;
-
 import jenkins.util.MemoryReductionUtil;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
-
-import static jenkins.model.lazy.AbstractLazyLoadRunMap.Direction.ASC;
-import static jenkins.model.lazy.AbstractLazyLoadRunMap.Direction.DESC;
 
 /**
  * {@link SortedMap} that keeps build records by their build numbers, in the descending order
@@ -91,14 +90,14 @@ public abstract class AbstractLazyLoadRunMap<R> extends AbstractMap<Integer,R> i
     /**
      * Used in {@link #all()} to quickly determine if we've already loaded everything.
      */
-    private boolean fullyLoaded;
+    private volatile boolean fullyLoaded;
 
     /**
      * Currently visible index.
      * Updated atomically. Once set to this field, the index object may not be modified.
      */
     private volatile Index index = new Index();
-    private LazyLoadRunMapEntrySet<R> entrySet = new LazyLoadRunMapEntrySet<R>(this);
+    private LazyLoadRunMapEntrySet<R> entrySet = new LazyLoadRunMapEntrySet<>(this);
 
     /**
      * Historical holder for map.
@@ -120,11 +119,11 @@ public abstract class AbstractLazyLoadRunMap<R> extends AbstractMap<Integer,R> i
         private final TreeMap<Integer,BuildReference<R>> byNumber;
 
         private Index() {
-            byNumber = new TreeMap<Integer,BuildReference<R>>(Collections.reverseOrder());
+            byNumber = new TreeMap<>(Collections.reverseOrder());
         }
 
         private Index(Index rhs) {
-            byNumber = new TreeMap<Integer,BuildReference<R>>(rhs.byNumber);
+            byNumber = new TreeMap<>(rhs.byNumber);
         }
     }
 
@@ -204,6 +203,7 @@ public abstract class AbstractLazyLoadRunMap<R> extends AbstractMap<Integer,R> i
         numberOnDisk = list;
     }
 
+    @Override
     public Comparator<? super Integer> comparator() {
         return Collections.reverseOrder();
     }
@@ -223,7 +223,7 @@ public abstract class AbstractLazyLoadRunMap<R> extends AbstractMap<Integer,R> i
      * Returns a read-only view of records that has already been loaded.
      */
     public SortedMap<Integer,R> getLoadedBuilds() {
-        return Collections.unmodifiableSortedMap(new BuildReferenceMapAdapter<R>(this, index.byNumber));
+        return Collections.unmodifiableSortedMap(new BuildReferenceMapAdapter<>(this, index.byNumber));
     }
 
     /**
@@ -232,6 +232,7 @@ public abstract class AbstractLazyLoadRunMap<R> extends AbstractMap<Integer,R> i
      * @param toKey
      *      Smallest build number-1 to be in the returned set (-1 because this is exclusive)
      */
+    @Override
     public SortedMap<Integer, R> subMap(Integer fromKey, Integer toKey) {
         // TODO: if this method can produce a lazy map, that'd be wonderful
         // because due to the lack of floor/ceil/higher/lower kind of methods
@@ -249,23 +250,27 @@ public abstract class AbstractLazyLoadRunMap<R> extends AbstractMap<Integer,R> i
             assert i!=null;
         }
 
-        return Collections.unmodifiableSortedMap(new BuildReferenceMapAdapter<R>(this, index.byNumber.subMap(fromKey, toKey)));
+        return Collections.unmodifiableSortedMap(new BuildReferenceMapAdapter<>(this, index.byNumber.subMap(fromKey, toKey)));
     }
 
+    @Override
     public SortedMap<Integer, R> headMap(Integer toKey) {
         return subMap(Integer.MAX_VALUE, toKey);
     }
 
+    @Override
     public SortedMap<Integer, R> tailMap(Integer fromKey) {
         return subMap(fromKey, Integer.MIN_VALUE);
     }
 
+    @Override
     public Integer firstKey() {
         R r = newestBuild();
         if (r==null)    throw new NoSuchElementException();
         return getNumberOf(r);
     }
 
+    @Override
     public Integer lastKey() {
         R r = oldestBuild();
         if (r==null)    throw new NoSuchElementException();
@@ -532,7 +537,7 @@ public abstract class AbstractLazyLoadRunMap<R> extends AbstractMap<Integer,R> i
      * Allow subtype to capture a reference.
      */
     protected BuildReference<R> createReference(R r) {
-        return new BuildReference<R>(getIdOf(r),r);
+        return new BuildReference<>(getIdOf(r), r);
     }
 
 

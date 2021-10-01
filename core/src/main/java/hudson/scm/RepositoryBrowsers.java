@@ -23,16 +23,14 @@
  */
 package hudson.scm;
 
+import hudson.Extension;
 import hudson.model.Descriptor;
 import hudson.model.Descriptor.FormException;
 import hudson.util.DescriptorList;
-import hudson.Extension;
-import org.kohsuke.stapler.StaplerRequest;
-
 import java.util.ArrayList;
 import java.util.List;
-
 import net.sf.json.JSONObject;
+import org.kohsuke.stapler.StaplerRequest;
 
 /**
  * List of all installed {@link RepositoryBrowsers}.
@@ -53,7 +51,7 @@ public class RepositoryBrowsers {
      * Only returns those {@link RepositoryBrowser} descriptors that extend from the given type.
      */
     public static List<Descriptor<RepositoryBrowser<?>>> filter(Class<? extends RepositoryBrowser> t) {
-        List<Descriptor<RepositoryBrowser<?>>> r = new ArrayList<Descriptor<RepositoryBrowser<?>>>();
+        List<Descriptor<RepositoryBrowser<?>>> r = new ArrayList<>();
         for (Descriptor<RepositoryBrowser<?>> d : RepositoryBrowser.all())
             if(d.isSubTypeOf(t))
                 r.add(d);

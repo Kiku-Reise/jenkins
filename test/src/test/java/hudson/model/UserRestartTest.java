@@ -24,27 +24,37 @@
 
 package hudson.model;
 
-import hudson.tasks.Mailer;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.*;
+import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
+import com.gargoylesoftware.htmlunit.WebRequest;
+import hudson.FilePath;
+import hudson.tasks.Mailer;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
-import org.jvnet.hudson.test.RestartableJenkinsRule;
+import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.JenkinsSessionRule;
 
 public class UserRestartTest {
 
     @Rule
-    public RestartableJenkinsRule rr = new RestartableJenkinsRule();
+    public JenkinsSessionRule sessions = new JenkinsSessionRule();
 
-    @Test public void persistedUsers() throws Exception {
-        rr.then(r -> {
+    @Test public void persistedUsers() throws Throwable {
+        sessions.then(r -> {
             User bob = User.getById("bob", true);
             bob.setFullName("Bob");
             bob.addProperty(new Mailer.UserProperty("bob@nowhere.net"));
         });
-        rr.then(r -> {
+        sessions.then(r -> {
             User bob = User.getById("bob", false);
             assertNotNull(bob);
             assertEquals("Bob", bob.getFullName());
@@ -56,8 +66,8 @@ public class UserRestartTest {
 
     @Issue("JENKINS-45892")
     @Test
-    public void badSerialization() {
-        rr.then(r -> {
+    public void badSerialization() throws Throwable {
+        sessions.then(r -> {
             r.jenkins.setSecurityRealm(r.createDummySecurityRealm());
             FreeStyleProject p = r.createFreeStyleProject("p");
             User u = User.get("pqhacker");
@@ -68,7 +78,7 @@ public class UserRestartTest {
             assertThat(text, not(containsString("<fullName>Pat Q. Hacker</fullName>")));
             assertThat(text, containsString("<id>pqhacker</id>"));
         });
-        rr.then(r -> {
+        sessions.then(r -> {
             FreeStyleProject p = r.jenkins.getItemByFullName("p", FreeStyleProject.class);
             User u = p.getProperty(BadProperty.class).user; // do not inline: call User.get second
             assertEquals(User.get("pqhacker"), u);
@@ -81,4 +91,47 @@ public class UserRestartTest {
         }
     }
 
+    @Test
+    @Issue("SECURITY-897")
+    public void legacyConfigMoveCannotEscapeUserFolder() throws Throwable {
+        sessions.then(r -> {
+                r.jenkins.setSecurityRealm(r.createDummySecurityRealm());
+                assertThat(r.jenkins.isUseSecurity(), equalTo(true));
+
+                // in order to create the folder "users"
+                User.getById("admin", true).save();
+
+                { // attempt with ".."
+                    JenkinsRule.WebClient wc = r.createWebClient()
+                            .withThrowExceptionOnFailingStatusCode(false);
+
+                    WebRequest request = new WebRequest(new URL(r.jenkins.getRootUrl() + "whoAmI/api/xml"));
+                    request.setAdditionalHeader("Authorization", base64("..", "any-password"));
+                    wc.getPage(request);
+                }
+                { // attempt with "../users/.."
+                    JenkinsRule.WebClient wc = r.createWebClient()
+                            .withThrowExceptionOnFailingStatusCode(false);
+
+                    WebRequest request = new WebRequest(new URL(r.jenkins.getRootUrl() + "whoAmI/api/xml"));
+                    request.setAdditionalHeader("Authorization", base64("../users/..", "any-password"));
+                    wc.getPage(request);
+                }
+
+                // security is still active
+                assertThat(r.jenkins.isUseSecurity(), equalTo(true));
+                // but, the config file was moved
+                FilePath rootPath = r.jenkins.getRootPath();
+                assertThat(rootPath.child("config.xml").exists(), equalTo(true));
+        });
+        sessions.then(r -> {
+                assertThat(r.jenkins.isUseSecurity(), equalTo(true));
+                FilePath rootPath = r.jenkins.getRootPath();
+                assertThat(rootPath.child("config.xml").exists(), equalTo(true));
+        });
+    }
+
+    private String base64(String login, String password) {
+        return "Basic " + Base64.getEncoder().encodeToString((login + ":" + password).getBytes(StandardCharsets.UTF_8));
+    }
 }

@@ -24,24 +24,17 @@
 package hudson.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.ArrayList;
-
 import hudson.model.Run;
+import java.util.ArrayList;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.jvnet.hudson.test.Issue;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 /**
  * @author Ignacio Albors
  */
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore({"com.sun.org.apache.xerces.*", "javax.xml.*", "org.xml.*"})
 public class RunListTest {
 
 	// RunList for byTimestamp tests
@@ -49,8 +42,8 @@ public class RunListTest {
 
 	// RunList<Run> is ordered from most to least recent
 	private void setUpByTimestampRuns() {
-		Run r1 = PowerMockito.mock(Run.class);
-		Run r2 = PowerMockito.mock(Run.class);
+		Run r1 = mock(Run.class);
+		Run r2 = mock(Run.class);
 
 		when(r1.getNumber()).thenReturn(1);
 		when(r2.getNumber()).thenReturn(2);
@@ -58,14 +51,13 @@ public class RunListTest {
 		when(r1.getTimeInMillis()).thenReturn(200L);
 		when(r2.getTimeInMillis()).thenReturn(300L);
 
-		ArrayList<Run> list = new ArrayList<Run>();
+		ArrayList<Run> list = new ArrayList<>();
 		list.add(r2);
 		list.add(r1);
 
 		rlist = RunList.fromRuns(list);
 	}
 
-	@PrepareForTest({Run.class})
 	@Test
 	public void byTimestampAllRuns() {
 		setUpByTimestampRuns();
@@ -75,8 +67,8 @@ public class RunListTest {
 	}
 
     @Issue("JENKINS-21159")
-	@PrepareForTest({Run.class})
 	@Test
+	@SuppressWarnings("deprecation")
 	public void byTimestampFirstRun() {
 		setUpByTimestampRuns();
 		// Only r1
@@ -85,8 +77,8 @@ public class RunListTest {
 		assertEquals(1, tested.getFirstBuild().getNumber());
 	}
 
-	@PrepareForTest({Run.class})
 	@Test
+	@SuppressWarnings("deprecation")
 	public void byTimestampLastRun() {
 		setUpByTimestampRuns();
 		// Only r2

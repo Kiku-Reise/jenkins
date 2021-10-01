@@ -3,9 +3,8 @@ package hudson.model;
 import hudson.Extension;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
-import jenkins.model.Jenkins;
-
 import java.io.IOException;
+import jenkins.model.Jenkins;
 import jenkins.model.queue.AsynchronousExecution;
 
 /**
@@ -53,7 +52,7 @@ public abstract class RestartListener implements ExtensionPoint {
     public static class Default extends RestartListener {
         @Override
         public boolean isReadyToRestart() throws IOException, InterruptedException {
-            for (Computer c : Jenkins.getInstance().getComputers()) {
+            for (Computer c : Jenkins.get().getComputers()) {
                 if (c.isOnline()) {
                     for (Executor e : c.getAllExecutors()) {
                         if (blocksRestart(e)) {

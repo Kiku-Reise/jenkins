@@ -24,17 +24,21 @@
 
 package hudson;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import hudson.model.StreamBuildListener;
 import hudson.model.TaskListener;
 import hudson.util.ProcessTree;
 import hudson.util.StreamTaskListener;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-
+import java.nio.charset.Charset;
 import jenkins.security.MasterToSlaveCallable;
 import org.apache.commons.io.FileUtils;
-import static org.junit.Assert.*;
-
 import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
@@ -59,15 +63,15 @@ public class LauncherTest {
                 Thread.sleep(100);
             long start = System.currentTimeMillis();
             p.kill();
-            assertTrue(p.join()!=0);
+            assertNotEquals(0, p.join());
             long end = System.currentTimeMillis();
             long terminationTime = end - start;
             assertTrue("Join did not finish promptly. The completion time (" + terminationTime + "ms) is longer than expected 15s", terminationTime < 15000);
             channels.french.call(new NoopCallable()); // this only returns after the other side of the channel has finished executing cancellation
             Thread.sleep(2000); // more delay to make sure it's gone
-            assertNull("process should be gone",ProcessTree.get().get(Integer.parseInt(FileUtils.readFileToString(tmp).trim())));
+            assertNull("process should be gone",ProcessTree.get().get(Integer.parseInt(FileUtils.readFileToString(tmp, Charset.defaultCharset()).trim())));
 
-            // Manual version of test: set up instance w/ one slave. Now in script console
+            // Manual version of test: set up instance w/ one agent. Now in script console
             // new hudson.FilePath(new java.io.File("/tmp")).createLauncher(new hudson.util.StreamTaskListener(System.err)).
             //   launch().cmds("sleep", "1d").stdout(System.out).stderr(System.err).start().kill()
             // returns immediately and pgrep sleep => nothing. But without fix
@@ -77,6 +81,7 @@ public class LauncherTest {
     }
 
     private static class NoopCallable extends MasterToSlaveCallable<Object,RuntimeException> {
+        @Override
         public Object call() throws RuntimeException {
             return null;
         }
@@ -96,27 +101,27 @@ public class LauncherTest {
     }
 
     @Issue("JENKINS-18368")
-    @Test public void decoratedByEnvMaintainsIsUnix() throws Exception {
+    @Test public void decoratedByEnvMaintainsIsUnix() {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         TaskListener listener = new StreamBuildListener(output);
         Launcher remoteLauncher = new Launcher.RemoteLauncher(listener, FilePath.localChannel, false);
         Launcher decorated = remoteLauncher.decorateByEnv(new EnvVars());
-        assertEquals(false, decorated.isUnix());
+        assertFalse(decorated.isUnix());
         remoteLauncher = new Launcher.RemoteLauncher(listener, FilePath.localChannel, true);
         decorated = remoteLauncher.decorateByEnv(new EnvVars());
-        assertEquals(true, decorated.isUnix());
+        assertTrue(decorated.isUnix());
     }
 
     @Issue("JENKINS-18368")
-    @Test public void decoratedByPrefixMaintainsIsUnix() throws Exception {
+    @Test public void decoratedByPrefixMaintainsIsUnix() {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         TaskListener listener = new StreamBuildListener(output);
         Launcher remoteLauncher = new Launcher.RemoteLauncher(listener, FilePath.localChannel, false);
         Launcher decorated = remoteLauncher.decorateByPrefix("test");
-        assertEquals(false, decorated.isUnix());
+        assertFalse(decorated.isUnix());
         remoteLauncher = new Launcher.RemoteLauncher(listener, FilePath.localChannel, true);
         decorated = remoteLauncher.decorateByPrefix("test");
-        assertEquals(true, decorated.isUnix());
+        assertTrue(decorated.isUnix());
     }
 
 }

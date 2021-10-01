@@ -23,19 +23,17 @@
  */
 package hudson.node_monitors;
 
+import hudson.Extension;
 import hudson.model.Computer;
 import hudson.model.Node;
 import hudson.remoting.Callable;
 import hudson.util.ClockDifference;
-import hudson.Extension;
+import java.io.IOException;
+import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.StaplerRequest;
-
-import java.io.IOException;
-
-import net.sf.json.JSONObject;
 
 /**
  * {@link NodeMonitor} that checks clock of {@link Node} to
@@ -53,6 +51,7 @@ public class ClockMonitor extends NodeMonitor {
      * @deprecated as of 2.0
      *      Don't use this field, use injection.
      */
+    @Deprecated
     @Restricted(NoExternalUse.class)
     public static /*almost final*/ AbstractNodeMonitorDescriptor<ClockDifference> DESCRIPTOR;
 
@@ -69,6 +68,7 @@ public class ClockMonitor extends NodeMonitor {
             return n.getClockDifferenceCallable();
         }
 
+        @Override
         public String getDisplayName() {
             return Messages.ClockMonitor_DisplayName();
         }

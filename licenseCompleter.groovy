@@ -8,7 +8,7 @@ complete {
     def lgpl = license("LGPL 2.1","http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html")
     def mitLicense = license("MIT License","http://www.opensource.org/licenses/mit-license.php")
     def bsdLicense = license("BSD License","http://opensource.org/licenses/BSD-2-Clause")
-    def jenkinsLicense = license("MIT License","https://jenkins.io/mit-license")
+    def jenkinsLicense = license("MIT License","https://www.jenkins.io/mit-license")
     def ccby = license("Creative Commons Attribution License","http://creativecommons.org/licenses/by/2.5")
 
 
@@ -40,31 +40,23 @@ complete {
     }
 */
 
-    match("antlr:*") {
-        rewriteLicense([], license("BSD License","http://www.antlr.org/license.html"))
-    }
-
-    match("jaxen:jaxen") {
-        rewriteLicense([], license("BSD License","http://jaxen.codehaus.org/license.html"))
-    }
-
-    match("*:dom4j") {
+    match("org.jenkins-ci.dom4j:dom4j") {
         rewriteLicense([],license("BSD License","http://dom4j.sourceforge.net/dom4j-1.6.1/license.html"))
     }
 
     match(["org.jenkins-ci.groovy:*"]) {
-        // see http://groovy.codehaus.org/License+Information
+        // see https://groovy-lang.org/faq.html
         // see http://jmdns.sourceforge.net/license.html
         rewriteLicense([],apacheLicense)
     }
 
     match("relaxngDatatype:relaxngDatatype") {
         // see http://sourceforge.net/projects/relaxng/
-        rewriteLicense([],bsdLicense);
+        rewriteLicense([],bsdLicense)
     }
 
     match(["org.kohsuke.jinterop:j-interop","org.kohsuke.jinterop:j-interopdeps"]) {
-        rewriteLicense([],license("LGPL v3","http://www.j-interop.org/license.html"))
+        rewriteLicense([license("MIT license", "http://www.opensource.org/licenses/mit-license.php")],license("LGPL v3","http://www.j-interop.org/license.html"))
     }
 
     // these are our own modules that have license in the trunk but not in these released versions
@@ -83,19 +75,10 @@ complete {
 
     match("*:sezpoz") {
         // GPL-phobia people react to "GPL" strongly, so accept sezpoz under CDDL
-        rewriteLicense([license("CDDL or GPL 2 with Classpath Exception",null)],cddl);
+        rewriteLicense([license("CDDL or GPL 2 with Classpath Exception",null)],cddl)
     }
            
     match("net.jcip:jcip-annotations") {
         rewriteLicense([],ccby)
     }
-
-    //
-    // Choose from multi-licensed modules
-    //==========================================================================
-
-    match("*:jna-posix") {
-        accept("GNU Lesser General Public License Version 2.1")
-    }
-
 }

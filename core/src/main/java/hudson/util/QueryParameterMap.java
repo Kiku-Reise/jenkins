@@ -23,7 +23,6 @@
  */
 package hudson.util;
 
-import javax.servlet.http.HttpServletRequest;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.ArrayList;
@@ -31,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * Parses the query string of the URL into a key/value pair.
@@ -38,7 +38,7 @@ import java.util.Map;
  * <p>
  * This class is even useful on the server side, as {@link HttpServletRequest#getParameter(String)}
  * can try to parse into the payload (and that can cause an exception if the payload is already consumed.
- * See HUDSON-8056.)
+ * See JENKINS-8056.)
  *
  * <p>
  * So if you are handling the payload yourself and only want to access the query parameters,
@@ -48,7 +48,7 @@ import java.util.Map;
  * @since 1.394
  */
 public class QueryParameterMap {
-    private final Map<String,List<String>> store = new HashMap<String, List<String>>();
+    private final Map<String,List<String>> store = new HashMap<>();
 
     /**
      * @param queryString
@@ -61,9 +61,7 @@ public class QueryParameterMap {
                 String[] kv = param.split("=");
                 String key = URLDecoder.decode(kv[0], "UTF-8");
                 String value = URLDecoder.decode(kv[1], "UTF-8");
-                List<String> values = store.get(key);
-                if (values == null)
-                    store.put(key, values = new ArrayList<String>());
+                List<String> values = store.computeIfAbsent(key, k -> new ArrayList<>());
                 values.add(value);
             }
         } catch (UnsupportedEncodingException e) {
@@ -82,6 +80,6 @@ public class QueryParameterMap {
 
     public List<String> getAll(String name) {
         List<String> v = store.get(name);
-        return v!=null? Collections.unmodifiableList(v) : Collections.<String>emptyList();
+        return v!=null? Collections.unmodifiableList(v) : Collections.emptyList();
     }
 }

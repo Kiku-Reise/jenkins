@@ -23,18 +23,17 @@
  */
 package hudson.cli;
 
-import groovy.lang.GroovyShell;
 import groovy.lang.Binding;
-import jenkins.model.Jenkins;
+import groovy.lang.GroovyShell;
 import hudson.Extension;
-import org.kohsuke.args4j.Argument;
-import org.kohsuke.args4j.CmdLineException;
-import org.apache.commons.io.IOUtils;
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+import jenkins.model.Jenkins;
+import org.apache.commons.io.IOUtils;
+import org.kohsuke.args4j.Argument;
+import org.kohsuke.args4j.CmdLineException;
 
 /**
  * Executes the specified groovy script.
@@ -57,9 +56,10 @@ public class GroovyCommand extends CLICommand {
     @Argument(metaVar="ARGUMENTS", index=1, usage="Command line arguments to pass into script.")
     public List<String> remaining = new ArrayList<>();
 
+    @Override
     protected int run() throws Exception {
         // this allows the caller to manipulate the JVM state, so require the execute script privilege.
-        Jenkins.getActiveInstance().checkPermission(Jenkins.RUN_SCRIPTS);
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
         Binding binding = new Binding();
         binding.setProperty("out",new PrintWriter(stdout,true));
@@ -67,8 +67,8 @@ public class GroovyCommand extends CLICommand {
         binding.setProperty("stdout",stdout);
         binding.setProperty("stderr",stderr);
 
-        GroovyShell groovy = new GroovyShell(Jenkins.getActiveInstance().getPluginManager().uberClassLoader, binding);
-        groovy.run(loadScript(),"RemoteClass",remaining.toArray(new String[remaining.size()]));
+        GroovyShell groovy = new GroovyShell(Jenkins.get().getPluginManager().uberClassLoader, binding);
+        groovy.run(loadScript(),"RemoteClass",remaining.toArray(new String[0]));
         return 0;
     }
 
@@ -85,4 +85,3 @@ public class GroovyCommand extends CLICommand {
         return null; // never called
     }
 }
-

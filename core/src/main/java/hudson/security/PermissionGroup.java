@@ -23,6 +23,8 @@
  */
 package hudson.security;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.Hudson;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -30,9 +32,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
-
 import org.jvnet.localizer.Localizable;
 
 /**
@@ -41,9 +40,9 @@ import org.jvnet.localizer.Localizable;
  * Sortable by the owner class name.
  */
 public final class PermissionGroup implements Iterable<Permission>, Comparable<PermissionGroup> {
-    private final SortedSet<Permission> permissions = new TreeSet<Permission>(Permission.ID_COMPARATOR);
+    private final SortedSet<Permission> permissions = new TreeSet<>(Permission.ID_COMPARATOR);
 
-    @Nonnull
+    @NonNull
     public final Class owner;
 
     /**
@@ -60,7 +59,7 @@ public final class PermissionGroup implements Iterable<Permission>, Comparable<P
      * @param title sets {@link #title}
      * @throws IllegalStateException if this group was already registered
      */
-    public PermissionGroup(@Nonnull Class owner, Localizable title) throws IllegalStateException {
+    public PermissionGroup(@NonNull Class owner, Localizable title) throws IllegalStateException {
         this(title.toString(Locale.ENGLISH), owner, title);
     }
 
@@ -71,7 +70,7 @@ public final class PermissionGroup implements Iterable<Permission>, Comparable<P
      * @throws IllegalStateException if this group was already registered
      * @since 2.127
      */
-    public PermissionGroup(String id, @Nonnull Class owner, Localizable title) throws IllegalStateException {
+    public PermissionGroup(String id, @NonNull Class owner, Localizable title) throws IllegalStateException {
         this.owner = owner;
         this.title = title;
         this.id = id;
@@ -90,6 +89,7 @@ public final class PermissionGroup implements Iterable<Permission>, Comparable<P
         return owner.getName();
     }
 
+    @Override
     public Iterator<Permission> iterator() {
         return getPermissions().iterator();
     }
@@ -104,7 +104,7 @@ public final class PermissionGroup implements Iterable<Permission>, Comparable<P
      * Lists up all the permissions in this group.
      */
     public synchronized List<Permission> getPermissions() {
-        return new ArrayList<Permission>(permissions);
+        return new ArrayList<>(permissions);
     }
 
     public synchronized boolean hasPermissionContainedBy(PermissionScope scope) {
@@ -125,6 +125,7 @@ public final class PermissionGroup implements Iterable<Permission>, Comparable<P
         return null;
     }
 
+    @Override
     public int compareTo(PermissionGroup that) {
         // first, sort by the 'compare order' number. This is so that
         // we can put Hudson.PERMISSIONS first.
@@ -169,7 +170,7 @@ public final class PermissionGroup implements Iterable<Permission>, Comparable<P
      *      always non-null. Read-only.
      */
     public static synchronized List<PermissionGroup> getAll() {
-        return new ArrayList<PermissionGroup>(PERMISSIONS);
+        return new ArrayList<>(PERMISSIONS);
     }
 
     /**
@@ -189,5 +190,5 @@ public final class PermissionGroup implements Iterable<Permission>, Comparable<P
     /**
      * All the permissions in the system, keyed by their owners.
      */
-    private static final SortedSet<PermissionGroup> PERMISSIONS = new TreeSet<PermissionGroup>();
+    private static final SortedSet<PermissionGroup> PERMISSIONS = new TreeSet<>();
 }

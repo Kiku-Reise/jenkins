@@ -24,18 +24,17 @@
 package hudson.util;
 
 import hudson.model.ModelObject;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import javax.servlet.ServletException;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
 import org.kohsuke.stapler.export.Flavor;
-
-import javax.servlet.ServletException;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 
 /**
  * Model object of dynamically filled list box.
@@ -167,13 +166,14 @@ public class ListBoxModel extends ArrayList<ListBoxModel.Option> implements Http
         rsp.serveExposedBean(req,this,Flavor.JSON);
     }
 
+    @Override
     public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object node) throws IOException, ServletException {
         writeTo(req,rsp);
     }
 
     /**
      * @deprecated
-     *      Exposed for stapler. Not meant for programatic consumption.
+     *      Exposed for stapler. Not meant for programmatic consumption.
      */
     @Exported
     @Deprecated

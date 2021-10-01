@@ -1,19 +1,17 @@
 package jenkins.security;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.model.PersistentDescriptor;
 import hudson.model.queue.Tasks;
 import hudson.util.DescribableList;
+import java.io.IOException;
+import java.util.List;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.GlobalConfigurationCategory;
-import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.StaplerRequest;
-
-import javax.annotation.Nonnull;
-import java.io.IOException;
-import java.util.List;
 
 /**
  * Show the {@link QueueItemAuthenticator} configurations on the system config page.
@@ -24,7 +22,7 @@ import java.util.List;
 @Extension @Symbol("queueItemAuthenticator")
 public class QueueItemAuthenticatorConfiguration extends GlobalConfiguration implements PersistentDescriptor {
     private final DescribableList<QueueItemAuthenticator,QueueItemAuthenticatorDescriptor> authenticators
-        = new DescribableList<QueueItemAuthenticator, QueueItemAuthenticatorDescriptor>(this);
+        = new DescribableList<>(this);
 
     private Object readResolve() {
         authenticators.setOwner(this);
@@ -32,7 +30,7 @@ public class QueueItemAuthenticatorConfiguration extends GlobalConfiguration imp
     }
 
     @Override
-    public @Nonnull GlobalConfigurationCategory getCategory() {
+    public @NonNull GlobalConfigurationCategory getCategory() {
         return GlobalConfigurationCategory.get(GlobalConfigurationCategory.Security.class);
     }
 
@@ -58,14 +56,14 @@ public class QueueItemAuthenticatorConfiguration extends GlobalConfiguration imp
         }
     }
 
-    public static @Nonnull QueueItemAuthenticatorConfiguration get() {
+    public static @NonNull QueueItemAuthenticatorConfiguration get() {
         return GlobalConfiguration.all().getInstance(QueueItemAuthenticatorConfiguration.class);
     }
 
     @Extension(ordinal = 100)
     public static class ProviderImpl extends QueueItemAuthenticatorProvider {
 
-        @Nonnull
+        @NonNull
         @Override
         public List<QueueItemAuthenticator> getAuthenticators() {
             return get().getAuthenticators();

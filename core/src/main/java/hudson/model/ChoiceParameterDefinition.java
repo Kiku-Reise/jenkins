@@ -1,23 +1,27 @@
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import edu.umd.cs.findbugs.annotations.Nullable;
+import hudson.Extension;
+import hudson.Util;
 import hudson.util.FormValidation;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import net.sf.json.JSONObject;
+import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.export.Exported;
-import org.apache.commons.lang.StringUtils;
-import net.sf.json.JSONObject;
-import hudson.Extension;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Arrays;
 
 /**
  * @author huybrechts
@@ -37,24 +41,25 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
         return !StringUtils.isEmpty(strippedChoices) && strippedChoices.split(CHOICES_DELIMITER).length > 0;
     }
 
-    public ChoiceParameterDefinition(String name, String choices, String description) {
+    public ChoiceParameterDefinition(@NonNull String name, @NonNull String choices, String description) {
         super(name, description);
         setChoicesText(choices);
         defaultValue = null;
     }
 
-    public ChoiceParameterDefinition(String name, String[] choices, String description) {
+    public ChoiceParameterDefinition(@NonNull String name, @NonNull String[] choices, String description) {
         super(name, description);
-        this.choices = new ArrayList<String>(Arrays.asList(choices));
+        this.choices = Stream.of(choices).map(Util::fixNull).collect(Collectors.toCollection(ArrayList::new));
         defaultValue = null;
     }
 
-    private ChoiceParameterDefinition(String name, List<String> choices, String defaultValue, String description) {
+    private ChoiceParameterDefinition(@NonNull String name, @NonNull List<String> choices, String defaultValue, String description) {
         super(name, description);
         this.choices = choices;
         this.defaultValue = defaultValue;
     }
 
+    // TODO consider switching @DataBoundConstructor to a ChoiceParameterDefinition(String) overload
     /**
      * Databound constructor for reflective instantiation.
      *
@@ -129,25 +134,69 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
+    @CheckForNull
     public StringParameterValue getDefaultParameterValue() {
-        return new StringParameterValue(getName(), defaultValue == null ? choices.get(0) : defaultValue, getDescription());
+        if (defaultValue == null) {
+            if (choices.isEmpty()) {
+                return null;
+            }
+            return new StringParameterValue(getName(), choices.get(0), getDescription());
+        }
+        return new StringParameterValue(getName(), defaultValue, getDescription());
     }
 
-    private StringParameterValue checkValue(StringParameterValue value) {
-        if (!choices.contains(value.value))
-            throw new IllegalArgumentException("Illegal choice for parameter " + getName() + ": " + value.value);
-        return value;
+    @Override
+    public boolean isValid(ParameterValue value) {
+        return choices.contains(((StringParameterValue) value).getValue());
     }
 
     @Override
     public ParameterValue createValue(StaplerRequest req, JSONObject jo) {
         StringParameterValue value = req.bindJSON(StringParameterValue.class, jo);
         value.setDescription(getDescription());
-        return checkValue(value);
+        checkValue(value, value.getValue());
+        return value;
     }
 
+    private void checkValue(StringParameterValue value, String value2) {
+        if (!isValid(value)) {
+            throw new IllegalArgumentException("Illegal choice for parameter " + getName() + ": " + value2);
+        }
+    }
+
+    @Override
     public StringParameterValue createValue(String value) {
-        return checkValue(new StringParameterValue(getName(), value, getDescription()));
+        StringParameterValue parameterValue = new StringParameterValue(getName(), value, getDescription());
+        checkValue(parameterValue, value);
+        return parameterValue;
+    }
+
+    @Override
+    public int hashCode() {
+        if (ChoiceParameterDefinition.class != getClass()) {
+            return super.hashCode();
+        }
+        return Objects.hash(getName(), getDescription(), choices, defaultValue);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (ChoiceParameterDefinition.class != getClass())
+            return super.equals(obj);
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        ChoiceParameterDefinition other = (ChoiceParameterDefinition) obj;
+        if (!Objects.equals(getName(), other.getName()))
+            return false;
+        if (!Objects.equals(getDescription(), other.getDescription()))
+            return false;
+        if (!Objects.equals(choices, other.choices))
+                return false;
+        return Objects.equals(defaultValue, other.defaultValue);
     }
 
     @Extension @Symbol({"choice","choiceParam"})
@@ -166,7 +215,7 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
         /*
          * We need this for JENKINS-26143 -- reflective creation cannot handle setChoices(Object). See that method for context.
          */
-        public ParameterDefinition newInstance(@Nullable StaplerRequest req, @Nonnull JSONObject formData) throws FormException {
+        public ParameterDefinition newInstance(@Nullable StaplerRequest req, @NonNull JSONObject formData) throws FormException {
             String name = formData.getString("name");
             String desc = formData.getString("description");
             String choiceText = formData.getString("choices");

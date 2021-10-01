@@ -1,24 +1,22 @@
 package hudson.init;
 
-import org.kohsuke.MetaInfServices;
-import org.jvnet.hudson.reactor.Task;
-
+import hudson.PluginManager;
+import hudson.util.DirScanner;
+import hudson.util.FileVisitor;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ServiceLoader;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import hudson.PluginManager;
 import jenkins.util.SystemProperties;
-import hudson.util.DirScanner;
-import hudson.util.FileVisitor;
-import java.util.Iterator;
-import java.util.ServiceLoader;
+import org.jvnet.hudson.reactor.Task;
+import org.kohsuke.MetaInfServices;
 
 /**
  * Strategy pattern of the various key decision making during the Jenkins initialization.
@@ -45,7 +43,7 @@ public class InitStrategy {
      *      and when that happens, Jenkins will ignore all but the first one in the list.
      */
     public List<File> listPluginArchives(PluginManager pm) throws IOException {
-        List<File> r = new ArrayList<File>();
+        List<File> r = new ArrayList<>();
 
         // the ordering makes sure that during the debugging we get proper precedence among duplicates.
         // for example, while doing "mvn jpi:run" or "mvn hpi:run" on a plugin that's bundled with Jenkins, we want to the
@@ -72,7 +70,7 @@ public class InitStrategy {
     /**
      * Lists up additional bundled plugins from the system property {@code hudson.bundled.plugins}.
      * Since 1.480 glob syntax is supported.
-     * For use in the "mvn hudson-dev:run".
+     * For use in {@code mvn jetty:run}.
      * TODO: maven-hpi-plugin should inject its own InitStrategy instead of having this in the core.
      */
     protected void getBundledPluginsFromProperty(final List<File> r) {
@@ -128,10 +126,11 @@ public class InitStrategy {
     private static class FilterByExtension implements FilenameFilter {
         private final List<String> extensions;
 
-        public FilterByExtension(String... extensions) {
+        FilterByExtension(String... extensions) {
             this.extensions = Arrays.asList(extensions);
         }
 
+        @Override
         public boolean accept(File dir, String name) {
             for (String extension : extensions) {
                 if (name.endsWith(extension))

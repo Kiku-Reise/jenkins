@@ -23,29 +23,23 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.Descriptor.FormException;
 import hudson.security.ACL;
-import hudson.security.Permission;
 import hudson.util.FormValidation;
 import hudson.views.MyViewsTabBar;
 import hudson.views.ViewsTabBar;
-
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import javax.annotation.CheckForNull;
 import javax.servlet.ServletException;
-
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
-
-import org.acegisecurity.AccessDeniedException;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
@@ -56,7 +50,7 @@ import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerFallback;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
-import org.kohsuke.stapler.interceptor.RequirePOST;
+import org.kohsuke.stapler.verb.POST;
 
 /**
  * A UserProperty that remembers user-private views.
@@ -75,7 +69,7 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
     /**
      * Always hold at least one view.
      */
-    private CopyOnWriteArrayList<View> views = new CopyOnWriteArrayList<View>();
+    private CopyOnWriteArrayList<View> views = new CopyOnWriteArrayList<>();
 
     private transient ViewGroupMixIn viewGroupMixIn;
 
@@ -93,7 +87,7 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
     public Object readResolve() {
         if (views == null)
             // this shouldn't happen, but an error in 1.319 meant the last view could be deleted
-            views = new CopyOnWriteArrayList<View>();
+            views = new CopyOnWriteArrayList<>();
 
         if (views.isEmpty()) {
             // preserve the non-empty invariant
@@ -105,8 +99,11 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
         }
 
         viewGroupMixIn = new ViewGroupMixIn(this) {
+            @Override
             protected List<View> views() { return views; }
+            @Override
             protected String primaryView() { return primaryViewName; }
+            @Override
             protected void primaryView(String name) { primaryViewName=name; }
         };
 
@@ -132,30 +129,37 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
     }
 
     ///// ViewGroup methods /////
+    @Override
     public String getUrl() {
         return user.getUrl() + "/my-views/";
     }
 
+    @Override
     public void save() throws IOException {
         user.save();
     }
 
+    @Override
     public Collection<View> getViews() {
         return viewGroupMixIn.getViews();
     }
 
+    @Override
     public View getView(String name) {
         return viewGroupMixIn.getView(name);
     }
 
+    @Override
     public boolean canDelete(View view) {
         return viewGroupMixIn.canDelete(view);
     }
 
+    @Override
     public void deleteView(View view) throws IOException {
         viewGroupMixIn.deleteView(view);
     }
 
+    @Override
     public void onViewRenamed(View view, String oldName, String newName) {
         viewGroupMixIn.onViewRenamed(view,oldName,newName);
     }
@@ -165,6 +169,7 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
         viewGroupMixIn.addView(view);
     }
 
+    @Override
     public View getPrimaryView() {
         return viewGroupMixIn.getPrimaryView();
     }
@@ -173,7 +178,7 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
         return new HttpRedirect("view/" + Util.rawEncode(getPrimaryView().getViewName()) + "/");
     }
 
-    @RequirePOST
+    @POST
     public synchronized void doCreateView(StaplerRequest req, StaplerResponse rsp)
             throws IOException, ServletException, ParseException, FormException {
         checkPermission(View.CREATE);
@@ -191,29 +196,33 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
         String view = Util.fixEmpty(value);
         if (view == null) return FormValidation.ok();
         if (exists) {
-        	return (getView(view)!=null) ?
+        	return getView(view) != null ?
             		FormValidation.ok() :
             		FormValidation.error(Messages.MyViewsProperty_ViewExistsCheck_NotExist(view));
         } else {
-        	return (getView(view)==null) ?
+        	return getView(view) == null ?
         			FormValidation.ok() :
         			FormValidation.error(Messages.MyViewsProperty_ViewExistsCheck_AlreadyExists(view));
         }
     }
 
+    @Override
     public ACL getACL() {
         return user.getACL();
     }
 
     ///// Action methods /////
+    @Override
     public String getDisplayName() {
         return Messages.MyViewsProperty_DisplayName();
     }
 
+    @Override
     public String getIconFileName() {
         return "user.png";
     }
 
+    @Override
     public String getUrlName() {
         return "my-views";
     }
@@ -238,30 +247,35 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
     	return this;
     }
 
+    @Override
     public ViewsTabBar getViewsTabBar() {
-        return Jenkins.getInstance().getViewsTabBar();
+        return Jenkins.get().getViewsTabBar();
     }
 
+    @Override
     public List<Action> getViewActions() {
-        // Jenkins.getInstance().getViewActions() are tempting but they are in a wrong scope
+        // Jenkins.get().getViewActions() are tempting but they are in a wrong scope
         return Collections.emptyList();
     }
 
+    @Override
     public Object getStaplerFallback() {
         return getPrimaryView();
     }
 
     public MyViewsTabBar getMyViewsTabBar() {
-        return Jenkins.getInstance().getMyViewsTabBar();
+        return Jenkins.get().getMyViewsTabBar();
     }
     
     @Extension @Symbol("myView")
     public static class GlobalAction implements RootAction {
 
+		@Override
 		public String getDisplayName() {
 			return Messages.MyViewsProperty_GlobalAction_DisplayName();
 		}
 
+		@Override
 		public String getIconFileName() {
 			// do not show when not logged in
 			if (User.current() == null ) {
@@ -271,6 +285,7 @@ public class MyViewsProperty extends UserProperty implements ModifiableViewGroup
 			return "user.png";
 		}
 
+		@Override
 		public String getUrlName() {
 			return "/me/my-views";
 		}

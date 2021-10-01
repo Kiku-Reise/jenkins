@@ -24,10 +24,15 @@
 
 package jenkins.security;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.PluginWrapper;
 import hudson.model.PersistentDescriptor;
 import hudson.model.UpdateSite;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.GlobalConfigurationCategory;
 import jenkins.model.Jenkins;
@@ -35,12 +40,6 @@ import net.sf.json.JSONObject;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.StaplerRequest;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Configuration for update site-provided warnings.
@@ -56,28 +55,28 @@ public class UpdateSiteWarningsConfiguration extends GlobalConfiguration impleme
     private HashSet<String> ignoredWarnings = new HashSet<>();
 
     @Override
-    public @Nonnull GlobalConfigurationCategory getCategory() {
+    public @NonNull GlobalConfigurationCategory getCategory() {
         return GlobalConfigurationCategory.get(GlobalConfigurationCategory.Security.class);
     }
 
-    @Nonnull
+    @NonNull
     public Set<String> getIgnoredWarnings() {
         return Collections.unmodifiableSet(ignoredWarnings);
     }
 
-    public boolean isIgnored(@Nonnull UpdateSite.Warning warning) {
+    public boolean isIgnored(@NonNull UpdateSite.Warning warning) {
         return ignoredWarnings.contains(warning.id);
     }
 
     @CheckForNull
-    public PluginWrapper getPlugin(@Nonnull UpdateSite.Warning warning) {
+    public PluginWrapper getPlugin(@NonNull UpdateSite.Warning warning) {
         if (warning.type != UpdateSite.Warning.Type.PLUGIN) {
             return null;
         }
         return Jenkins.get().getPluginManager().getPlugin(warning.component);
     }
 
-    @Nonnull
+    @NonNull
     public Set<UpdateSite.Warning> getAllWarnings() {
         HashSet<UpdateSite.Warning> allWarnings = new HashSet<>();
 
@@ -90,7 +89,7 @@ public class UpdateSiteWarningsConfiguration extends GlobalConfiguration impleme
         return allWarnings;
     }
 
-    @Nonnull
+    @NonNull
     public Set<UpdateSite.Warning> getApplicableWarnings() {
         Set<UpdateSite.Warning> allWarnings = getAllWarnings();
 

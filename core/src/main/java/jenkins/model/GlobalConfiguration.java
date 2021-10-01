@@ -1,13 +1,12 @@
 package jenkins.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
 import hudson.model.Describable;
 import hudson.model.Descriptor;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.StaplerRequest;
-
-import javax.annotation.Nonnull;
 
 /**
  * Convenient base class for extensions that contributes to the system configuration page but nothing
@@ -48,6 +47,7 @@ public abstract class GlobalConfiguration extends Descriptor<GlobalConfiguration
         super(self());
     }
 
+    @Override
     public final Descriptor<GlobalConfiguration> getDescriptor() {
         return this;
     }
@@ -71,7 +71,7 @@ public abstract class GlobalConfiguration extends Descriptor<GlobalConfiguration
     /**
      * Returns all the registered {@link GlobalConfiguration} descriptors.
      */
-    public static @Nonnull ExtensionList<GlobalConfiguration> all() {
+    public static @NonNull ExtensionList<GlobalConfiguration> all() {
         return Jenkins.get().getDescriptorList(GlobalConfiguration.class);
         // pointless type parameters help work around bugs in javac in earlier versions http://codepad.org/m1bbFRrH
     }

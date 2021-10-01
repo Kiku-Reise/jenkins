@@ -27,10 +27,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import hudson.Util;
-
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.Test;
 
 /**
@@ -50,7 +48,7 @@ public class SearchTest {
 
         SuggestedItem x = Search.find(si, "abc def ghi");
         assertNotNull(x);
-        assertEquals(x.getUrl(),"/abc-def-ghi");
+        assertEquals("/abc-def-ghi", x.getUrl());
 
         List<SuggestedItem> l = Search.suggest(si, "abc def ghi");
         assertEquals(2,l.size());
@@ -68,24 +66,30 @@ public class SearchTest {
         final String searchName = "sameDisplayName";
 
         SearchItem searchItemHit = new SearchItem() {
+            @Override
             public SearchIndex getSearchIndex() {
                     return null;
             }
+            @Override
             public String getSearchName() {
                 return searchName;
             }
+            @Override
             public String getSearchUrl() {
                 return "/job/"+Util.rawEncode(query) + "/";
             }
         };
 
         SearchItem searchItemNoHit = new SearchItem() {
+            @Override
             public SearchIndex getSearchIndex() {
                     return null;
             }
+            @Override
             public String getSearchName() {
                 return searchName;
             }
+            @Override
             public String getSearchUrl() {
                 return "/job/someotherJob/";
             }
@@ -93,7 +97,7 @@ public class SearchTest {
 
         SuggestedItem suggestedHit = new SuggestedItem(searchItemHit);
         SuggestedItem suggestedNoHit = new SuggestedItem(searchItemNoHit);
-        ArrayList<SuggestedItem> list = new ArrayList<SuggestedItem>();
+        ArrayList<SuggestedItem> list = new ArrayList<>();
         list.add(suggestedNoHit);
         list.add(suggestedHit); // make sure the hit is the second item
 

@@ -22,30 +22,7 @@
  * THE SOFTWARE.
  */
 
-/**
- * @author pjanouse
- */
-
 package hudson.cli;
-
-import hudson.model.FreeStyleBuild;
-import hudson.model.FreeStyleProject;
-import hudson.model.QueueTest;
-import hudson.util.OneShotEvent;
-import jenkins.model.Jenkins;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.jvnet.hudson.test.JenkinsRule;
-
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static hudson.cli.CLICommandInvoker.Matcher.failedWith;
 import static hudson.cli.CLICommandInvoker.Matcher.hasNoStandardOutput;
@@ -54,8 +31,21 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
-import static org.junit.Assert.fail;
+import static org.hamcrest.Matchers.nullValue;
 
+import hudson.model.FreeStyleBuild;
+import hudson.model.FreeStyleProject;
+import hudson.util.OneShotEvent;
+import java.util.concurrent.Future;
+import jenkins.model.Jenkins;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.jvnet.hudson.test.JenkinsRule;
+
+/**
+ * @author pjanouse
+ */
 public class CancelQuietDownCommandTest {
 
     private CLICommandInvoker command;
@@ -89,13 +79,27 @@ public class CancelQuietDownCommandTest {
 
     @Test
     public void cancelQuietDownShouldSuccessOnQuietDownedJenkins() throws Exception {
-        j.jenkins.getActiveInstance().doQuietDown();
+        j.jenkins.doQuietDown();
         QuietDownCommandTest.assertJenkinsInQuietMode(j);
         final CLICommandInvoker.Result result = command
                 .authorizedTo(Jenkins.READ, Jenkins.ADMINISTER)
                 .invoke();
         assertThat(result, succeededSilently());
         QuietDownCommandTest.assertJenkinsNotInQuietMode(j);
+    }
+
+    @Test
+    public void cancelQuietDownShouldResetQuietReason() throws Exception {
+        final String testReason = "reason";
+        Jenkins.get().doQuietDown(false, 0, testReason);
+        QuietDownCommandTest.assertJenkinsInQuietMode(j);
+        assertThat(j.jenkins.getQuietDownReason(), equalTo(testReason));
+        final CLICommandInvoker.Result result = command
+                .authorizedTo(Jenkins.READ, Jenkins.ADMINISTER)
+                .invoke();
+        assertThat(result, succeededSilently());
+        QuietDownCommandTest.assertJenkinsNotInQuietMode(j);
+        assertThat(j.jenkins.getQuietDownReason(), nullValue());
     }
 
     //
@@ -142,7 +146,7 @@ public class CancelQuietDownCommandTest {
         Future<FreeStyleBuild> build = OnlineNodeCommandTest.startBlockingAndFinishingBuild(project, finish);
         assertThat(((FreeStyleProject) j.jenkins.getItem("aProject")).getBuilds(), hasSize(1));
         assertThat(project.isBuilding(), equalTo(true));
-        j.jenkins.getActiveInstance().doQuietDown();
+        j.jenkins.doQuietDown();
         QuietDownCommandTest.assertJenkinsInQuietMode(j);
 
         final CLICommandInvoker.Result result = command

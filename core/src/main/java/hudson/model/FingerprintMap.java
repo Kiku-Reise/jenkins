@@ -23,15 +23,14 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Util;
 import hudson.util.KeyedDataStorage;
-import jenkins.model.Jenkins;
-
-import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
+import jenkins.fingerprints.FingerprintStorage;
+import jenkins.model.Jenkins;
 
 /**
  * Cache of {@link Fingerprint}s.
@@ -50,7 +49,7 @@ public final class FingerprintMap extends KeyedDataStorage<Fingerprint,Fingerpri
      * Returns true if there's some data in the fingerprint database.
      */
     public boolean isReady() {
-        return new File(Jenkins.getInstance().getRootDir(),"fingerprints").exists();
+        return FingerprintStorage.get().isReady();
     }
 
     /**
@@ -60,15 +59,15 @@ public final class FingerprintMap extends KeyedDataStorage<Fingerprint,Fingerpri
      *      an owner-less build.
      * @throws IOException Loading error
      */
-    public @Nonnull Fingerprint getOrCreate(@CheckForNull AbstractBuild build, @Nonnull String fileName, @Nonnull byte[] md5sum) throws IOException {
+    public @NonNull Fingerprint getOrCreate(@CheckForNull AbstractBuild build, @NonNull String fileName, @NonNull byte[] md5sum) throws IOException {
         return getOrCreate(build,fileName, Util.toHexString(md5sum));
     }
 
-    public @Nonnull Fingerprint getOrCreate(@CheckForNull AbstractBuild build, @Nonnull String fileName, @Nonnull String md5sum) throws IOException {
+    public @NonNull Fingerprint getOrCreate(@CheckForNull AbstractBuild build, @NonNull String fileName, @NonNull String md5sum) throws IOException {
         return super.getOrCreate(md5sum, new FingerprintParams(build,fileName));
     }
 
-    public @Nonnull Fingerprint getOrCreate(@CheckForNull Run build, @Nonnull String fileName, @Nonnull String md5sum) throws IOException {
+    public @NonNull Fingerprint getOrCreate(@CheckForNull Run build, @NonNull String fileName, @NonNull String md5sum) throws IOException {
         return super.getOrCreate(md5sum, new FingerprintParams(build,fileName));
     }
 
@@ -82,19 +81,14 @@ public final class FingerprintMap extends KeyedDataStorage<Fingerprint,Fingerpri
         return super.get(md5sum,createIfNotExist,createParams);
     }
 
-    private byte[] toByteArray(String md5sum) {
-        byte[] data = new byte[16];
-        for( int i=0; i<md5sum.length(); i+=2 )
-            data[i/2] = (byte)Integer.parseInt(md5sum.substring(i,i+2),16);
-        return data;
+    @Override
+    protected @NonNull Fingerprint create(@NonNull String md5sum, @NonNull FingerprintParams createParams) throws IOException {
+        return new Fingerprint(createParams.build, createParams.fileName, Util.fromHexString(md5sum));
     }
 
-    protected @Nonnull Fingerprint create(@Nonnull String md5sum, @Nonnull FingerprintParams createParams) throws IOException {
-        return new Fingerprint(createParams.build, createParams.fileName, toByteArray(md5sum));
-    }
-
-    protected @CheckForNull Fingerprint load(@Nonnull String key) throws IOException {
-        return Fingerprint.load(toByteArray(key));
+    @Override
+    protected @CheckForNull Fingerprint load(@NonNull String key) throws IOException {
+        return Fingerprint.load(key);
     }
 
 static class FingerprintParams {
@@ -104,7 +98,7 @@ static class FingerprintParams {
     final @CheckForNull Run build;
     final String fileName;
 
-    public FingerprintParams(@CheckForNull Run build, @Nonnull String fileName) {
+    FingerprintParams(@CheckForNull Run build, @NonNull String fileName) {
         this.build = build;
         this.fileName = fileName;
 

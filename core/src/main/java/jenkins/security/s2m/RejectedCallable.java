@@ -1,9 +1,8 @@
 package jenkins.security.s2m;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.PluginWrapper;
 import jenkins.model.Jenkins;
-
-import javax.annotation.CheckForNull;
 
 /**
 * @author Kohsuke Kawaguchi
@@ -17,6 +16,6 @@ public /*for Jelly*/ class RejectedCallable {
 
     public @CheckForNull
     PluginWrapper getPlugin() {
-        return Jenkins.getInstance().pluginManager.whichPlugin(clazz);
+        return Jenkins.get().pluginManager.whichPlugin(clazz);
     }
 }

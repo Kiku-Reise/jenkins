@@ -23,6 +23,8 @@
  */
 package hudson.util;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.CloseProofOutputStream;
 import hudson.model.TaskListener;
 import hudson.remoting.RemoteOutputStream;
@@ -42,10 +44,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.util.SystemProperties;
 import org.kohsuke.stapler.framework.io.WriterOutputStream;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 
 // TODO: AbstractTaskListener is empty now, but there are dependencies on that e.g. Ruby Runtime - JENKINS-48116)
 // The change needs API deprecation policy or external usages cleanup.
@@ -59,7 +59,7 @@ import javax.annotation.Nonnull;
  * @author Kohsuke Kawaguchi
  */
 public class StreamTaskListener extends AbstractTaskListener implements TaskListener, Closeable {
-    @Nonnull
+    @NonNull
     private PrintStream out;
     @CheckForNull
     private Charset charset;
@@ -71,18 +71,18 @@ public class StreamTaskListener extends AbstractTaskListener implements TaskList
      *      or use {@link #fromStdout()} or {@link #fromStderr()}.
      */
     @Deprecated
-    public StreamTaskListener(@Nonnull PrintStream out) {
+    public StreamTaskListener(@NonNull PrintStream out) {
         this(out,null);
     }
 
-    public StreamTaskListener(@Nonnull OutputStream out) {
+    public StreamTaskListener(@NonNull OutputStream out) {
         this(out,null);
     }
 
-    public StreamTaskListener(@Nonnull OutputStream out, @CheckForNull Charset charset) {
+    public StreamTaskListener(@NonNull OutputStream out, @CheckForNull Charset charset) {
         try {
             if (charset == null)
-                this.out = (out instanceof PrintStream) ? (PrintStream)out : new PrintStream(out, false);
+                this.out = out instanceof PrintStream ? (PrintStream)out : new PrintStream(out, false);
             else
                 this.out = new PrintStream(out, false, charset.name());
             this.charset = charset;
@@ -92,18 +92,18 @@ public class StreamTaskListener extends AbstractTaskListener implements TaskList
         }
     }
 
-    public StreamTaskListener(@Nonnull File out) throws IOException {
+    public StreamTaskListener(@NonNull File out) throws IOException {
         this(out,null);
     }
 
-    public StreamTaskListener(@Nonnull File out, @CheckForNull Charset charset) throws IOException {
+    public StreamTaskListener(@NonNull File out, @CheckForNull Charset charset) throws IOException {
         // don't do buffering so that what's written to the listener
         // gets reflected to the file immediately, which can then be
         // served to the browser immediately
         this(Files.newOutputStream(asPath(out)), charset);
     }
 
-    private static Path asPath(@Nonnull File out) throws IOException {
+    private static Path asPath(@NonNull File out) throws IOException {
         try {
             return out.toPath();
         } catch (InvalidPathException e) {
@@ -120,7 +120,7 @@ public class StreamTaskListener extends AbstractTaskListener implements TaskList
      * @throws IOException if the file could not be opened.
      * @since 1.651
      */
-    public StreamTaskListener(@Nonnull File out, boolean append, @CheckForNull Charset charset) throws IOException {
+    public StreamTaskListener(@NonNull File out, boolean append, @CheckForNull Charset charset) throws IOException {
         // don't do buffering so that what's written to the listener
         // gets reflected to the file immediately, which can then be
         // served to the browser immediately
@@ -132,7 +132,7 @@ public class StreamTaskListener extends AbstractTaskListener implements TaskList
         );
     }
 
-    public StreamTaskListener(@Nonnull Writer w) throws IOException {
+    public StreamTaskListener(@NonNull Writer w) throws IOException {
         this(new WriterOutputStream(w));
     }
 
@@ -166,12 +166,30 @@ public class StreamTaskListener extends AbstractTaskListener implements TaskList
     private void writeObject(ObjectOutputStream out) throws IOException {
         out.writeObject(new RemoteOutputStream(new CloseProofOutputStream(this.out)));
         out.writeObject(charset==null? null : charset.name());
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.log(Level.FINE, null, new Throwable("serializing here with AUTO_FLUSH=" + AUTO_FLUSH));
+        }
     }
 
+    private static final String KEY_AUTO_FLUSH = StreamTaskListener.class.getName() + ".AUTO_FLUSH";
+    static {
+        SystemProperties.allowOnAgent(KEY_AUTO_FLUSH);
+    }
+    /**
+     * Restores eager remote flushing behavior.
+     * By default, remote tasks are expected to call {@link PrintStream#flush} before exiting.
+     * This flag will ensure that no output is lost from tasks which neglect to do so,
+     * at the expense of heavier Remoting traffic and reduced performance.
+     */
+    private static /* not final */ boolean AUTO_FLUSH = SystemProperties.getBoolean(KEY_AUTO_FLUSH);
+
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-        out = new PrintStream((OutputStream)in.readObject(),true);
+        out = new PrintStream((OutputStream)in.readObject(), AUTO_FLUSH);
         String name = (String)in.readObject();
         charset = name==null ? null : Charset.forName(name);
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.log(Level.FINE, null, new Throwable("deserializing here with AUTO_FLUSH=" + AUTO_FLUSH));
+        }
     }
 
     @Override

@@ -23,12 +23,11 @@
  */
 package hudson.model.queue;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.model.Queue.Executable;
-
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 
 /**
  * Convenience methods around {@link Executable}.
@@ -42,7 +41,7 @@ public class Executables {
      * @param e Executable
      * @return Discovered subtask
      */
-    public static @Nonnull SubTask getParentOf(@Nonnull Executable e) 
+    public static @NonNull SubTask getParentOf(@NonNull Executable e) 
             throws Error, RuntimeException {
         try {
             return e.getParent();

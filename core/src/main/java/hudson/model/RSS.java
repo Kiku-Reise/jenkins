@@ -24,15 +24,14 @@
 package hudson.model;
 
 import hudson.FeedAdapter;
+import hudson.util.RunList;
+import java.io.IOException;
+import java.util.Collection;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletResponse;
 import jenkins.model.Jenkins;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.Collection;
 
 /**
  * RSS related code.
@@ -40,25 +39,6 @@ import java.util.Collection;
  * @author Kohsuke Kawaguchi
  */
 public final class RSS {
-
-    /**
-     * Parses trackback ping.
-     */
-    public static void doTrackback( Object it, StaplerRequest req, StaplerResponse rsp ) throws IOException, ServletException {
-
-        String url = req.getParameter("url");
-
-        rsp.setStatus(HttpServletResponse.SC_OK);
-        rsp.setContentType("application/xml; charset=UTF-8");
-        try (PrintWriter pw = rsp.getWriter()) {
-            pw.println("<response>");
-            pw.println("<error>" + (url != null ? 0 : 1) + "</error>");
-            if (url == null) {
-                pw.println("<message>url must be specified</message>");
-            }
-            pw.println("</response>");
-        }
-    }
 
     /**
      * Sends the RSS feed to the client.
@@ -77,12 +57,50 @@ public final class RSS {
         req.setAttribute("title",title);
         req.setAttribute("url",url);
         req.setAttribute("entries",entries);
-        req.setAttribute("rootURL", Jenkins.getInstance().getRootUrl());
 
         String flavor = req.getParameter("flavor");
         if(flavor==null)    flavor="atom";
         flavor = flavor.replace('/', '_'); // Don't allow path to any jelly
 
-        req.getView(Jenkins.getInstance(),"/hudson/"+flavor+".jelly").forward(req,rsp);
+        if (flavor.equals("atom")) {
+            rsp.setContentType("application/atom+xml; charset=UTF-8");
+        } else {
+            rsp.setContentType("text/xml; charset=UTF-8");
+        }
+
+        req.getView(Jenkins.get(),"/hudson/"+flavor+".jelly").forward(req,rsp);
+    }
+
+    /**
+     * Sends the RSS feed to the client using a default feed adapter.
+     *
+     * @param title
+     *      Title of the feed.
+     * @param url
+     *      URL of the model object that owns this feed. Relative to the context root.
+     * @param runList
+     *      Entries to be listed in the RSS feed.
+     * @since 2.215
+     */
+    public static void rss(StaplerRequest req, StaplerResponse rsp, String title, String url, RunList runList) throws IOException, ServletException {
+        rss(req, rsp, title, url, runList, null);
+    }
+
+    /**
+     * Sends the RSS feed to the client using a specific feed adapter.
+     *
+     * @param title
+     *      Title of the feed.
+     * @param url
+     *      URL of the model object that owns this feed. Relative to the context root.
+     * @param runList
+     *      Entries to be listed in the RSS feed.
+     * @param feedAdapter
+     *      Controls how to render entries to RSS.
+     * @since 2.215
+     */
+    public static void rss(StaplerRequest req, StaplerResponse rsp, String title, String url, RunList runList, FeedAdapter<Run> feedAdapter) throws IOException, ServletException {
+        final FeedAdapter<Run> feedAdapter_ = feedAdapter == null ? Run.FEED_ADAPTER : feedAdapter;
+        forwardToRss(title, url, runList, feedAdapter_, req, rsp);
     }
 }

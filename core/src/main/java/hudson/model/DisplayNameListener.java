@@ -25,12 +25,11 @@ package hudson.model;
 
 
 
+import hudson.Extension;
+import hudson.model.listeners.ItemListener;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import hudson.Extension;
-import hudson.model.listeners.ItemListener;
 
 /**
  * @author kingfai
@@ -39,15 +38,15 @@ import hudson.model.listeners.ItemListener;
 @Extension
 public class DisplayNameListener extends ItemListener {
 
-    private final static Logger LOGGER = Logger.getLogger(DisplayNameListener.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(DisplayNameListener.class.getName());
 
-    @Override
     /**
      * Called after the user has clicked OK in the New Job page when 
      * Copy existing job has been selected.
      * The fields in item will be displayed in when the config page is loaded
      * displayed.
      */
+    @Override
     public void onCopied(Item src, Item item) {
         // bug 5056825 - Display name field should be cleared when you copy a job within the same folder.
         if(item instanceof AbstractItem && src.getParent() == item.getParent()) {
@@ -60,7 +59,6 @@ public class DisplayNameListener extends ItemListener {
         }
     }
 
-    @Override
     /**
      * Called after the user has changed the project name of a job and then
      * clicked on submit.
@@ -69,6 +67,7 @@ public class DisplayNameListener extends ItemListener {
      * @param oldName the old name
      * @param newName the new name
      */
+    @Override
     public void onRenamed(Item item, String oldName, String newName) {
         // bug 5077308 - Display name field should be cleared when you rename a job.
         if(item instanceof AbstractItem) {

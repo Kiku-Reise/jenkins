@@ -49,7 +49,7 @@ class Latch {
      *      Number of threads that need to enter the {@link #synchronize()} method
      *      before all of them get released.
      */
-    public Latch(int n) {
+    Latch(int n) {
         this.n = n;
     }
 
@@ -75,10 +75,7 @@ class Latch {
 
         try {
             onCriteriaMet();
-        } catch (Error e) {
-            abort(e);
-            throw e;
-        } catch (RuntimeException e) {
+        } catch (Error | RuntimeException e) {
             abort(e);
             throw e;
         }

@@ -23,13 +23,11 @@
  */
 package hudson.cli;
 
-import java.util.List;
-
 import hudson.Extension;
-import hudson.model.TopLevelItem;
 import hudson.model.DirectlyModifiableView;
+import hudson.model.TopLevelItem;
 import hudson.model.View;
-
+import java.util.List;
 import org.kohsuke.args4j.Argument;
 
 /**
@@ -42,6 +40,7 @@ public class AddJobToViewCommand extends CLICommand {
     @Argument(usage="Name of the view", required=true, index=0)
     private View view;
 
+    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     @Argument(usage="Job names", required=true, index=1)
     private List<TopLevelItem> jobs;
 

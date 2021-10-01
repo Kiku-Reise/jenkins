@@ -24,6 +24,7 @@
 
 package hudson.console;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
 import hudson.Util;
@@ -32,10 +33,10 @@ import hudson.model.Computer;
 import hudson.model.Run;
 import hudson.tasks.BuildWrapper;
 import hudson.util.ArgumentListBuilder;
-
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serializable;
+import jenkins.util.JenkinsJVM;
 
 /**
  * A hook to allow filtering of information that is written to the console log.
@@ -43,6 +44,10 @@ import java.io.OutputStream;
  * direct access to the underlying {@link OutputStream} so it's possible to suppress
  * data, which isn't possible from the other interfaces.
  * ({@link ArgumentListBuilder#add(String, boolean)} is a simpler way to suppress a single password.)
+ * <p>Implementations which are {@link Serializable} may be sent to an agent JVM for processing.
+ * In particular, this happens under <a href="https://www.jenkins.io/jep/210">JEP-210</a>.
+ * In this case, the implementation should not assume that {@link JenkinsJVM#isJenkinsJVM},
+ * and if generating {@link ConsoleNote}s will need to encode them on the master side first.
  * @author dty
  * @since 1.383
  * @see BuildWrapper#decorateLogger
@@ -52,17 +57,20 @@ public abstract class ConsoleLogFilter implements ExtensionPoint {
      * Called on the start of each build, giving extensions a chance to intercept
      * the data that is written to the log.
      *
+     * @throws AbstractMethodError
+     *     when a plugin overrides neither this method nor {@link #decorateLogger(Run, OutputStream)}.
+     *
      * @deprecated as of 1.632. Use {@link #decorateLogger(Run, OutputStream)}
      */
+    @Deprecated
     public OutputStream decorateLogger(AbstractBuild build, OutputStream logger) throws IOException, InterruptedException {
         if (Util.isOverridden(ConsoleLogFilter.class, getClass(), "decorateLogger", Run.class, OutputStream.class)) {
             // old client calling newer implementation. forward the call.
             return decorateLogger((Run) build, logger);
         } else {
-            // happens only if the subtype fails to override neither decorateLogger method
-            throw new AssertionError("The plugin '" + this.getClass().getName() + "' still uses " +
-                    "deprecated decorateLogger(AbstractBuild,OutputStream) method. " +
-                    "Update the plugin to use setUp(Run,OutputStream) instead.");
+            // happens only if the subtype fails to override either decorateLogger method
+            throw new AbstractMethodError("Plugin class '" + this.getClass().getName() + "' does not override " +
+                    "either overload of the decorateLogger method.");
         }
     }
 
@@ -95,7 +103,7 @@ public abstract class ConsoleLogFilter implements ExtensionPoint {
      *      contextual decoration.
      * @since 1.632
      */
-    public OutputStream decorateLogger(@Nonnull Computer computer, OutputStream logger) throws IOException, InterruptedException {
+    public OutputStream decorateLogger(@NonNull Computer computer, OutputStream logger) throws IOException, InterruptedException {
         return logger;      // by default no-op
     }
 

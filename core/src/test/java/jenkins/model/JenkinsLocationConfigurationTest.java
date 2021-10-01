@@ -23,14 +23,14 @@
  */
 package jenkins.model;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
-import static org.powermock.api.mockito.PowerMockito.mock;
 
 /**
  * Tests for {@link JenkinsLocationConfiguration}.
@@ -43,12 +43,7 @@ public class JenkinsLocationConfigurationTest {
     @Before
     public void setUp() {
         config = mock(JenkinsLocationConfiguration.class, Mockito.CALLS_REAL_METHODS);
-        Answer<String> mockVoid = new Answer<String>() {
-            @Override
-            public String answer(InvocationOnMock invocation) throws Throwable {
-                return "stub";
-            }
-        };
+        Answer<String> mockVoid = invocation -> "stub";
         Mockito.doAnswer(mockVoid).when(config).save();      
         Mockito.doAnswer(mockVoid).when(config).save();
     }
@@ -68,6 +63,9 @@ public class JenkinsLocationConfigurationTest {
         // Quoted value
         config.setAdminAddress("\""+email2+"\"");
         assertEquals(email2, config.getAdminAddress());
+
+        config.setAdminAddress("    test@foo.bar     ");
+        assertEquals(email,config.getAdminAddress());
     }
     
     @Test

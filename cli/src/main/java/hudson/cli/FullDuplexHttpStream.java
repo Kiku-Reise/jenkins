@@ -1,5 +1,6 @@
 package hudson.cli;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -33,6 +34,7 @@ public class FullDuplexHttpStream {
      * A way to upload data to the server.
      * You will need to write to this and {@link OutputStream#flush} it to finish establishing a connection.
      */
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public OutputStream getOutputStream() {
         return output;
     }
@@ -60,7 +62,7 @@ public class FullDuplexHttpStream {
 
         // server->client
         LOGGER.fine("establishing download side");
-        HttpURLConnection con = (HttpURLConnection) target.openConnection();
+        HttpURLConnection con = openHttpConnection(target);
         con.setDoOutput(true); // request POST to avoid caching
         con.setRequestMethod("POST");
         con.addRequestProperty("Session", uuid.toString());
@@ -78,7 +80,7 @@ public class FullDuplexHttpStream {
 
         // client->server uses chunked encoded POST for unlimited capacity.
         LOGGER.fine("establishing upload side");
-        con = (HttpURLConnection) target.openConnection();
+        con = openHttpConnection(target);
         con.setDoOutput(true); // request POST
         con.setRequestMethod("POST");
         con.setChunkedStreamingMode(0);
@@ -92,10 +94,15 @@ public class FullDuplexHttpStream {
         LOGGER.fine("established upload side");
     }
 
-    // As this transport mode is using POST, it is necessary to resolve possible redirections using GET first.
+    @SuppressFBWarnings(value = "URLCONNECTION_SSRF_FD", justification = "Client-side code doesn't involve SSRF.")
+    private HttpURLConnection openHttpConnection(URL target) throws IOException {
+        return (HttpURLConnection) target.openConnection();
+    }
+
+    // As this transport mode is using POST, it is necessary to resolve possible redirections using GET first.    @SuppressFBWarnings(value = "URLCONNECTION_SSRF_FD", justification = "Client-side code doesn't involve SSRF.")
     private URL tryToResolveRedirects(URL base, String authorization) {
         try {
-            HttpURLConnection con = (HttpURLConnection) base.openConnection();
+            HttpURLConnection con = openHttpConnection(base);
             if (authorization != null) {
                 con.addRequestProperty("Authorization", authorization);
             }

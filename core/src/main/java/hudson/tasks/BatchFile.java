@@ -23,22 +23,25 @@
  */
 package hudson.tasks;
 
-import hudson.FilePath;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import hudson.Extension;
+import hudson.FilePath;
 import hudson.Util;
 import hudson.model.AbstractProject;
 import hudson.util.FormValidation;
 import hudson.util.LineEndingConversion;
+import java.util.ArrayList;
+import java.util.List;
+import jenkins.tasks.filters.EnvVarsFilterLocalRule;
+import jenkins.tasks.filters.EnvVarsFilterLocalRuleDescriptor;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.Beta;
 import org.kohsuke.accmod.restrictions.DoNotUse;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
-
-import java.io.ObjectStreamException;
-
-import javax.annotation.CheckForNull;
 
 /**
  * Executes commands by using Windows batch file.
@@ -51,23 +54,37 @@ public class BatchFile extends CommandInterpreter {
         super(LineEndingConversion.convertEOL(command, LineEndingConversion.EOLType.Windows));
     }
 
+    /**
+     * Set local environment variable filter rules
+     * @param configuredLocalRules list of local environment filter rules
+     * @since 2.246
+     */
+    @Restricted(Beta.class)
+    @DataBoundSetter
+    public void setConfiguredLocalRules(List<EnvVarsFilterLocalRule> configuredLocalRules) {
+        this.configuredLocalRules = configuredLocalRules;
+    }
+
     private Integer unstableReturn;
 
+    @Override
     public String[] buildCommandLine(FilePath script) {
         return new String[] {"cmd","/c","call",script.getRemote()};
     }
 
+    @Override
     protected String getContents() {
         return LineEndingConversion.convertEOL(command+"\r\nexit %ERRORLEVEL%",LineEndingConversion.EOLType.Windows);
     }
 
+    @Override
     protected String getFileExtension() {
         return ".bat";
     }
 
     @CheckForNull
     public final Integer getUnstableReturn() {
-        return new Integer(0).equals(unstableReturn) ? null : unstableReturn;
+        return Integer.valueOf(0).equals(unstableReturn) ? null : unstableReturn;
     }
 
     @DataBoundSetter
@@ -80,9 +97,11 @@ public class BatchFile extends CommandInterpreter {
         return this.unstableReturn != null && exitCode != 0 && this.unstableReturn.equals(exitCode);
     }
 
-    private Object readResolve() throws ObjectStreamException {
+    private Object readResolve() {
         BatchFile batch = new BatchFile(command);
         batch.setUnstableReturn(unstableReturn);
+        // backward compatibility
+        batch.setConfiguredLocalRules(configuredLocalRules == null ? new ArrayList<>() : configuredLocalRules);
         return batch;
     }
 
@@ -93,6 +112,7 @@ public class BatchFile extends CommandInterpreter {
             return "/help/project-config/batch.html";
         }
 
+        @Override
         public String getDisplayName() {
             return Messages.BatchFile_DisplayName();
         }
@@ -121,8 +141,15 @@ public class BatchFile extends CommandInterpreter {
             return FormValidation.ok();
         }
 
+        @Override
         public boolean isApplicable(Class<? extends AbstractProject> jobType) {
             return true;
+        }
+
+        // used by Jelly view
+        @Restricted(NoExternalUse.class)
+        public List<EnvVarsFilterLocalRuleDescriptor> getApplicableLocalRules() {
+            return EnvVarsFilterLocalRuleDescriptor.allApplicableFor(BatchFile.class);
         }
     }
 }

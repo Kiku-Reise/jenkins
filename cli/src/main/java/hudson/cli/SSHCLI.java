@@ -24,6 +24,9 @@
 
 package hudson.cli;
 
+import static java.util.logging.Level.FINE;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.util.QuotedStringTokenizer;
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -36,7 +39,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
-import static java.util.logging.Level.FINE;
 import java.util.logging.Logger;
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.channel.ClientChannel;
@@ -51,8 +53,6 @@ import org.apache.sshd.common.util.io.NoCloseInputStream;
 import org.apache.sshd.common.util.io.NoCloseOutputStream;
 import org.apache.sshd.common.util.security.SecurityUtils;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 /**
  * Implements SSH connection mode of {@link CLI}.
  * In a separate class to avoid any class loading of {@code sshd-core} when not using {@code -ssh} mode.
@@ -61,11 +61,10 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  */
 class SSHCLI {
 
-    @SuppressFBWarnings(value = "RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE", justification = "Due to whatever reason FindBugs reports it fot try-with-resources")
     static int sshConnection(String jenkinsUrl, String user, List<String> args, PrivateKeyProvider provider, final boolean strictHostKey) throws IOException {
         Logger.getLogger(SecurityUtils.class.getName()).setLevel(Level.WARNING); // suppress: BouncyCastle not registered, using the default JCE provider
         URL url = new URL(jenkinsUrl + "login");
-        URLConnection conn = url.openConnection();
+        URLConnection conn = openConnection(url);
         CLI.verifyJenkinsConnection(conn);
         String endpointDescription = conn.getHeaderField("X-SSH-Endpoint");
 
@@ -129,6 +128,11 @@ class SSHCLI {
                 client.stop();
             }
         }
+    }
+
+    @SuppressFBWarnings(value = "URLCONNECTION_SSRF_FD", justification = "Client-side code doesn't involve SSRF.")
+    private static URLConnection openConnection(URL url) throws IOException {
+        return url.openConnection();
     }
 
     private SSHCLI() {}

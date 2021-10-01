@@ -30,34 +30,56 @@ import hudson.Extension;
 import hudson.FilePath;
 import hudson.Util;
 import hudson.XmlFile;
-import hudson.model.*;
-import hudson.util.HttpResponses;
-import jenkins.util.MemoryReductionUtil;
-import jenkins.model.Jenkins;
+import hudson.model.AbstractModelObject;
+import hudson.model.AutoCompletionCandidates;
+import hudson.model.Computer;
+import hudson.model.Saveable;
+import hudson.model.TaskListener;
 import hudson.model.listeners.SaveableListener;
 import hudson.remoting.Channel;
 import hudson.remoting.VirtualChannel;
 import hudson.slaves.ComputerListener;
 import hudson.util.CopyOnWriteList;
+import hudson.util.HttpResponses;
 import hudson.util.RingBufferLogHandler;
 import hudson.util.XStream2;
-import jenkins.security.MasterToSlaveCallable;
-import net.sf.json.JSONObject;
-import org.apache.commons.lang.StringUtils;
-import org.kohsuke.stapler.*;
-import org.kohsuke.stapler.interceptor.RequirePOST;
-
-import javax.servlet.ServletException;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.text.Collator;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import javax.servlet.ServletException;
+import jenkins.model.Jenkins;
+import jenkins.security.MasterToSlaveCallable;
+import jenkins.util.MemoryReductionUtil;
+import net.sf.json.JSONObject;
+import org.apache.commons.lang.StringUtils;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.interceptor.RequirePOST;
+import org.kohsuke.stapler.verb.POST;
 
 /**
  * Records a selected set of logs so that the system administrator
@@ -66,7 +88,7 @@ import org.kohsuke.accmod.restrictions.NoExternalUse;
  * TODO: still a work in progress.
  *
  * <h3>Access Control</h3>
- * {@link LogRecorder} is only visible for administrators, and this access control happens at
+ * {@link LogRecorder} is only visible for administrators and system readers, and this access control happens at
  * {@link jenkins.model.Jenkins#getLog()}, the sole entry point for binding {@link LogRecorder} to URL.
  *
  * @author Kohsuke Kawaguchi
@@ -75,8 +97,8 @@ import org.kohsuke.accmod.restrictions.NoExternalUse;
 public class LogRecorder extends AbstractModelObject implements Saveable {
     private volatile String name;
 
-    public final CopyOnWriteList<Target> targets = new CopyOnWriteList<Target>();
-    private final static TargetComparator TARGET_COMPARATOR = new TargetComparator();
+    public final CopyOnWriteList<Target> targets = new CopyOnWriteList<>();
+    private static final TargetComparator TARGET_COMPARATOR = new TargetComparator();
     
     @Restricted(NoExternalUse.class)
     Target[] orderedTargets() {
@@ -156,7 +178,7 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
                     continue;
                 }
 
-                if (match.booleanValue()) {
+                if (match) {
                     // most specific logger matches, so publish
                     super.publish(record);
                 }
@@ -215,14 +237,14 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
         public Boolean matches(LogRecord r) {
             boolean levelSufficient = r.getLevel().intValue() >= level;
             if (name.length() == 0) {
-                return Boolean.valueOf(levelSufficient); // include if level matches
+                return levelSufficient; // include if level matches
             }
             String logName = r.getLoggerName();
             if(logName==null || !logName.startsWith(name))
                 return null; // not in the domain of this logger
             String rest = logName.substring(name.length());
             if (rest.startsWith(".") || rest.length()==0) {
-                return Boolean.valueOf(levelSufficient); // include if level matches
+                return levelSufficient; // include if level matches
             }
             return null;
         }
@@ -251,7 +273,9 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
 
     }
     
-    private static class TargetComparator implements Comparator<Target> {
+    private static class TargetComparator implements Comparator<Target>, Serializable {
+
+        private static final long serialVersionUID = 9285340752515798L;
 
         @Override
         public int compare(Target left, Target right) {
@@ -261,7 +285,7 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
 
     private static final class SetLevel extends MasterToSlaveCallable<Void,Error> {
         /** known loggers (kept per agent), to avoid GC */
-        @SuppressWarnings("MismatchedQueryAndUpdateOfCollection") private static final Set<Logger> loggers = new HashSet<Logger>();
+        @SuppressWarnings("MismatchedQueryAndUpdateOfCollection") private static final Set<Logger> loggers = new HashSet<>();
         private final String name;
         private final Level level;
         SetLevel(String name, Level level) {
@@ -275,7 +299,7 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
             return null;
         }
         void broadcast() {
-            for (Computer c : Jenkins.getInstance().getComputers()) {
+            for (Computer c : Jenkins.get().getComputers()) {
                 if (c.getName().length() > 0) { // i.e. not master
                     VirtualChannel ch = c.getChannel();
                     if (ch != null) {
@@ -292,7 +316,7 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
 
     @Extension @Restricted(NoExternalUse.class) public static final class ComputerLogInitializer extends ComputerListener {
         @Override public void preOnline(Computer c, Channel channel, FilePath root, TaskListener listener) throws IOException, InterruptedException {
-            for (LogRecorder recorder : Jenkins.getInstance().getLog().logRecorders.values()) {
+            for (LogRecorder recorder : Jenkins.get().getLog().logRecorders.values()) {
                 for (Target t : recorder.targets) {
                     channel.call(new SetLevel(t.name, t.getLevel()));
                 }
@@ -307,10 +331,12 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
         new WeakLogHandler(handler,Logger.getLogger(""));
     }
 
+    @Override
     public String getDisplayName() {
         return name;
     }
 
+    @Override
     public String getSearchUrl() {
         return Util.rawEncode(name);
     }
@@ -320,14 +346,16 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
     }
 
     public LogRecorderManager getParent() {
-        return Jenkins.getInstance().getLog();
+        return Jenkins.get().getLog();
     }
 
     /**
      * Accepts submission from the configuration page.
      */
-    @RequirePOST
+    @POST
     public synchronized void doConfigSubmit( StaplerRequest req, StaplerResponse rsp ) throws IOException, ServletException {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+
         JSONObject src = req.getSubmittedForm();
 
         String newName = src.getString("name"), redirect = ".";
@@ -354,6 +382,8 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
 
     @RequirePOST
     public HttpResponse doClear() throws IOException {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+
         handler.clear();
         return HttpResponses.redirectToDot();
     }
@@ -370,6 +400,7 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
     /**
      * Save the settings to a file.
      */
+    @Override
     public synchronized void save() throws IOException {
         if(BulkChange.contains(this))   return;
         getConfigFile().write(this);
@@ -381,6 +412,8 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
      */
     @RequirePOST
     public synchronized void doDoDelete(StaplerResponse rsp) throws IOException, ServletException {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+
         getConfigFile().delete();
         getParent().logRecorders.remove(name);
         // Disable logging for all our targets,
@@ -420,17 +453,19 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
      * @since 1.519
      */
     public Map<Computer,List<LogRecord>> getSlaveLogRecords() {
-        Map<Computer,List<LogRecord>> result = new TreeMap<Computer,List<LogRecord>>(new Comparator<Computer>() {
+        Map<Computer,List<LogRecord>> result = new TreeMap<>(new Comparator<Computer>() {
             final Collator COLL = Collator.getInstance();
+
+            @Override
             public int compare(Computer c1, Computer c2) {
                 return COLL.compare(c1.getDisplayName(), c2.getDisplayName());
             }
         });
-        for (Computer c : Jenkins.getInstance().getComputers()) {
+        for (Computer c : Jenkins.get().getComputers()) {
             if (c.getName().length() == 0) {
                 continue; // master
             }
-            List<LogRecord> recs = new ArrayList<LogRecord>();
+            List<LogRecord> recs = new ArrayList<>();
             try {
                 for (LogRecord rec : c.getLogRecords()) {
                     for (Target t : targets) {
@@ -440,9 +475,7 @@ public class LogRecorder extends AbstractModelObject implements Saveable {
                         }
                     }
                 }
-            } catch (IOException x) {
-                continue;
-            } catch (InterruptedException x) {
+            } catch (IOException | InterruptedException x) {
                 continue;
             }
             if (!recs.isEmpty()) {

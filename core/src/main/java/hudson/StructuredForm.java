@@ -23,13 +23,12 @@
  */
 package hudson;
 
+import java.util.Collections;
+import java.util.List;
+import javax.servlet.ServletException;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.StaplerRequest;
-
-import javax.servlet.ServletException;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * Obtains the structured form data from {@link StaplerRequest}.
@@ -68,7 +67,7 @@ public class StructuredForm {
         if(v instanceof JSONObject)
             return Collections.singletonList((JSONObject)v);
         if(v instanceof JSONArray)
-            return (List)(JSONArray)v;
+            return (List) v;
 
         throw new IllegalArgumentException();
     }

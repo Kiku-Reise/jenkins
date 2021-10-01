@@ -23,8 +23,10 @@
  */
 package hudson.model;
 
-import hudson.Util;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.EnvVars;
+import hudson.Util;
 import hudson.diagnosis.OldDataMonitor;
 import hudson.model.Queue.QueueAction;
 import hudson.model.labels.LabelAssignmentAction;
@@ -32,12 +34,6 @@ import hudson.model.queue.SubTask;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildWrapper;
 import hudson.util.VariableResolver;
-import jenkins.model.RunAction2;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.export.ExportedBean;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -49,12 +45,12 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import com.google.common.collect.Lists;
-import static com.google.common.collect.Sets.newHashSet;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
+import jenkins.model.RunAction2;
 import jenkins.util.SystemProperties;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
 
 /**
  * Records the parameter values used for a build.
@@ -87,7 +83,7 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
 
     private Set<String> safeParameters;
 
-    private @Nonnull List<ParameterValue> parameters;
+    private @NonNull List<ParameterValue> parameters;
 
     private List<String> parameterDefinitionNames;
 
@@ -99,7 +95,7 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
 
     private transient Run<?, ?> run;
 
-    public ParametersAction(@Nonnull List<ParameterValue> parameters) {
+    public ParametersAction(@NonNull List<ParameterValue> parameters) {
         this.parameters = new ArrayList<>(parameters);
         String paramNames = SystemProperties.getString(SAFE_PARAMETERS_SYSTEM_PROPERTY_NAME);
         safeParameters = new TreeSet<>();
@@ -113,7 +109,7 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
      * The additional safe parameters should be only those considered safe to override the environment
      * and what is declared in the project config in addition to those specified by the user in
      * {@link #SAFE_PARAMETERS_SYSTEM_PROPERTY_NAME}.
-     * See <a href="https://issues.jenkins-ci.org/browse/SECURITY-170">SECURITY-170</a>
+     * See <a href="https://issues.jenkins.io/browse/SECURITY-170">SECURITY-170</a>
      *
      * @param parameters the parameters
      * @param additionalSafeParameters additional safe parameters
@@ -174,13 +170,14 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
         return new VariableResolver.Union<String>(resolvers);
     }
     
+    @Override
     public Iterator<ParameterValue> iterator() {
         return getParameters().iterator();
     }
 
     @Exported(visibility=2)
     public List<ParameterValue> getParameters() {
-        return Collections.<ParameterValue>unmodifiableList(filter(parameters));
+        return Collections.unmodifiableList(filter(parameters));
     }
 
     public ParameterValue getParameter(String name) {
@@ -192,6 +189,7 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
         return null;
     }
 
+    @Override
     public Label getAssignedLabel(SubTask task) {
         for (ParameterValue p : getParameters()) {
             if (p == null) continue;
@@ -201,14 +199,17 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
         return null;
     }
 
+    @Override
     public String getDisplayName() {
         return Messages.ParameterAction_DisplayName();
     }
 
+    @Override
     public String getIconFileName() {
         return "document-properties.png";
     }
 
+    @Override
     public String getUrlName() {
         return "parameters";
     }
@@ -216,17 +217,18 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
     /**
      * Allow an other build of the same project to be scheduled, if it has other parameters.
      */
+    @Override
     public boolean shouldSchedule(List<Action> actions) {
         List<ParametersAction> others = Util.filter(actions, ParametersAction.class);
         if (others.isEmpty()) {
             return !parameters.isEmpty();
         } else {
             // I don't think we need multiple ParametersActions, but let's be defensive
-            Set<ParameterValue> params = new HashSet<ParameterValue>();
+            Set<ParameterValue> params = new HashSet<>();
             for (ParametersAction other: others) {
                 params.addAll(other.parameters);
             }
-            return !params.equals(new HashSet<ParameterValue>(this.parameters));
+            return !params.equals(new HashSet<>(this.parameters));
         }
     }
 
@@ -235,15 +237,15 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
      * with the overrides / new values given as parameters.
      * @return New {@link ParametersAction}. The result may contain null {@link ParameterValue}s
      */
-    @Nonnull
+    @NonNull
     public ParametersAction createUpdated(Collection<? extends ParameterValue> overrides) {
         if(overrides == null) {
             ParametersAction parametersAction = new ParametersAction(parameters);
             parametersAction.safeParameters = this.safeParameters;
             return parametersAction;
         }
-        List<ParameterValue> combinedParameters = Lists.<ParameterValue>newArrayList(overrides);
-        Set<String> names = newHashSet();
+        List<ParameterValue> combinedParameters = new ArrayList<>(overrides);
+        Set<String> names = new HashSet<>();
 
         for(ParameterValue v : overrides) {
             if (v == null) continue;
@@ -265,7 +267,7 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
      * with the overrides / new values given as another {@link ParametersAction}.
      * @return New {@link ParametersAction}. The result may contain null {@link ParameterValue}s
      */
-    @Nonnull
+    @NonNull
     public ParametersAction merge(@CheckForNull ParametersAction overrides) {
         if (overrides == null) {
             return new ParametersAction(parameters, this.safeParameters);
@@ -324,7 +326,7 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
             return parameters;
         }
 
-        List<ParameterValue> filteredParameters = new ArrayList<ParameterValue>();
+        List<ParameterValue> filteredParameters = new ArrayList<>();
 
         for (ParameterValue v : this.parameters) {
             if (this.parameterDefinitionNames.contains(v.getName()) || isSafeParameter(v.getName())) {

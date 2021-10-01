@@ -24,7 +24,6 @@
 package hudson.console;
 
 import hudson.util.ByteArrayOutputStream2;
-
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -32,7 +31,7 @@ import java.io.OutputStream;
  * Filtering {@link OutputStream} that buffers text by line, so that the derived class
  * can perform some manipulation based on the contents of the whole line.
  *
- * TODO: Mac is supposed to be CR-only. This class needs to handle that.
+ * <p>Subclass {@link Delegating} in the typical case that you are decorating an underlying stream.
  *
  * @author Kohsuke Kawaguchi
  * @since 1.349
@@ -51,6 +50,7 @@ public abstract class LineTransformationOutputStream extends OutputStream {
      */
     protected abstract void eol(byte[] b, int len) throws IOException;
 
+    @Override
     public void write(int b) throws IOException {
         buf.write(b);
         if (b==LF) eol();
@@ -110,4 +110,32 @@ public abstract class LineTransformationOutputStream extends OutputStream {
     }
 
     private static final int LF = 0x0A;
+
+    /**
+     * Convenience subclass for cases where you wish to process lines being sent to an underlying stream.
+     * {@link #eol} will typically {@link OutputStream#write(byte[], int, int)} to {@link #out}.
+     * Flushing or closing the decorated stream will behave properly.
+     * @since 2.173
+     */
+    public abstract static class Delegating extends LineTransformationOutputStream {
+
+        protected final OutputStream out;
+
+        protected Delegating(OutputStream out) {
+            this.out = out;
+        }
+
+        @Override
+        public void flush() throws IOException {
+            out.flush();
+        }
+
+        @Override
+        public void close() throws IOException {
+            super.close();
+            out.close();
+        }
+
+    }
+
 }

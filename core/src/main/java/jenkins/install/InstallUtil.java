@@ -26,38 +26,34 @@ package jenkins.install;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Logger;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
-import javax.inject.Provider;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.StringUtils;
-import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.NoExternalUse;
-
-import com.google.common.base.Function;
 import com.thoughtworks.xstream.XStream;
-
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Functions;
-import hudson.Main;
 import hudson.model.UpdateCenter.DownloadJob.InstallationStatus;
 import hudson.model.UpdateCenter.DownloadJob.Installing;
 import hudson.model.UpdateCenter.InstallationJob;
 import hudson.model.UpdateCenter.UpdateCenterJob;
 import hudson.util.VersionNumber;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.inject.Provider;
 import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
 import jenkins.util.xml.XMLUtils;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang.StringUtils;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
  * Jenkins install utilities.
@@ -79,7 +75,7 @@ public class InstallUtil {
      */
     private static class ProviderChain<T> implements Provider<T> {
         private final Iterator<Function<Provider<T>,T>> functions;
-        public ProviderChain(Iterator<Function<Provider<T>,T>> functions) {
+        ProviderChain(Iterator<Function<Provider<T>,T>> functions) {
             this.functions = functions;
         }
         @Override
@@ -94,7 +90,7 @@ public class InstallUtil {
     public static void proceedToNextStateFrom(InstallState prior) {
         InstallState next = getNextInstallState(prior);
         if (next != null) {
-            Jenkins.getInstance().setInstallState(next);
+            Jenkins.get().setInstallState(next);
         }
     }
     
@@ -160,10 +156,9 @@ public class InstallUtil {
 
         VersionNumber lastRunVersion = new VersionNumber(getLastExecVersion());
 
-        // Neither the top level config or the lastExecVersionFile have a version
-        // stored in them, which means it's a new install.
-        if (FORCE_NEW_INSTALL_VERSION.equals(lastRunVersion) || lastRunVersion.compareTo(NEW_INSTALL_VERSION) == 0) {
-            Jenkins j = Jenkins.getInstance();
+        // has the setup wizard been completed?
+        if (!SetupWizard.getUpdateStateFile().exists()) {
+            Jenkins j = Jenkins.get();
             
             // Allow for skipping
             if(shouldNotRun) {
@@ -177,15 +172,6 @@ public class InstallUtil {
                 }
             }
 
-            if (!FORCE_NEW_INSTALL_VERSION.equals(lastRunVersion)) {
-                // Edge case: used Jenkins 1 but did not save the system config page,
-                // the version is not persisted and returns 1.0, so try to check if
-                // they actually did anything
-                if (!j.getItemMap().isEmpty() || !j.getNodes().isEmpty()) {
-                    return InstallState.UPGRADE;
-                }
-            }
-            
             return InstallState.INITIAL_SECURITY_SETUP;
         }
 
@@ -221,11 +207,11 @@ public class InstallUtil {
      * @return The last saved Jenkins instance version.
      * @see #saveLastExecVersion()
      */
-    public static @Nonnull String getLastExecVersion() {
+    public static @NonNull String getLastExecVersion() {
         File lastExecVersionFile = getLastExecVersionFile();
         if (lastExecVersionFile.exists()) {
             try {
-                String version = FileUtils.readFileToString(lastExecVersionFile);
+                String version = FileUtils.readFileToString(lastExecVersionFile, Charset.defaultCharset());
                 // JENKINS-37438 blank will force the setup
                 // wizard regardless of current state of the system
                 if (StringUtils.isBlank(version)) {
@@ -265,25 +251,25 @@ public class InstallUtil {
      * Save a specific version as the last execute version.
      * @param version The version to save.
      */
-    static void saveLastExecVersion(@Nonnull String version) {
+    static void saveLastExecVersion(@NonNull String version) {
         File lastExecVersionFile = getLastExecVersionFile();
         try {
-            FileUtils.write(lastExecVersionFile, version);
+            FileUtils.write(lastExecVersionFile, version, Charset.defaultCharset());
         } catch (IOException e) {
             LOGGER.log(SEVERE, "Failed to save " + lastExecVersionFile.getAbsolutePath(), e);
         }
     }
 
     static File getConfigFile() {
-        return new File(Jenkins.getInstance().getRootDir(), "config.xml");
+        return new File(Jenkins.get().getRootDir(), "config.xml");
     }
 
     static File getLastExecVersionFile() {
-        return new File(Jenkins.getInstance().getRootDir(), "jenkins.install.InstallUtil.lastExecVersion");
+        return new File(Jenkins.get().getRootDir(), "jenkins.install.InstallUtil.lastExecVersion");
     }
 
     static File getInstallingPluginsFile() {
-        return new File(Jenkins.getInstance().getRootDir(), "jenkins.install.InstallUtil.installingPlugins");
+        return new File(Jenkins.get().getRootDir(), "jenkins.install.InstallUtil.installingPlugins");
     }
 
     private static String getCurrentExecVersion() {
@@ -308,7 +294,6 @@ public class InstallUtil {
 
     /**
      * Persists a list of installing plugins; this is used in the case Jenkins fails mid-installation and needs to be restarted
-     * @param installingPlugins
      */
     public static synchronized void persistInstallStatus(List<UpdateCenterJob> installingPlugins) {
         File installingPluginsFile = getInstallingPluginsFile();
@@ -317,7 +302,7 @@ public class InstallUtil {
 		return;
 	}
 	LOGGER.fine("Writing install state to: " + installingPluginsFile.getAbsolutePath());
-	Map<String,String> statuses = new HashMap<String,String>();
+	Map<String,String> statuses = new HashMap<>();
 	for(UpdateCenterJob j : installingPlugins) {
 		if(j instanceof InstallationJob && j.getCorrelationId() != null) { // only include install jobs with a correlation id (directly selected)
 			InstallationJob ij = (InstallationJob)j;

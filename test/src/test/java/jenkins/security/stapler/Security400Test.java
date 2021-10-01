@@ -23,6 +23,13 @@
  */
 package jenkins.security.stapler;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import com.cloudbees.hudson.plugins.folder.computed.FolderCron;
 import com.gargoylesoftware.htmlunit.HttpMethod;
 import com.gargoylesoftware.htmlunit.Page;
@@ -41,6 +48,13 @@ import hudson.model.queue.QueueTaskFuture;
 import hudson.security.FullControlOnceLoggedInAuthorizationStrategy;
 import hudson.security.HudsonPrivateSecurityRealm;
 import hudson.tasks.Builder;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import jenkins.model.Jenkins;
 import org.junit.After;
 import org.junit.Before;
@@ -51,20 +65,6 @@ import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.MockAuthorizationStrategy;
 import org.jvnet.hudson.test.TestExtension;
 import org.kohsuke.stapler.WebApp;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
 
 /**
  * To check the previous behavior you can use:
@@ -261,7 +261,114 @@ public class Security400Test {
             assertEquals(3, atomicResult.get());
         }
     }
-    
+
+    /*
+     * Similar to ensureDoStopStillReachable()}, but tests Executor.doStopBuild(String) instead of Executor.doStop().
+     * Implemented here (instead of ExecutorTest) for convenience (uses SemaphoredBuilder).
+     */
+    @Test
+    @Issue("JENKINS-59656")
+    public void ensureDoStopBuildWorks() throws Exception {
+        j.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = j.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false); // we expect 404
+        wc.getOptions().setPrintContentOnFailingStatusCode(false); // be less verbose
+
+        // gives access to the build result code
+        final AtomicInteger atomicResult = new AtomicInteger(0);
+        // blocks execution of the build step
+        final Semaphore semaphore = new Semaphore(0);
+        // the test project with a semaphored build step
+        FreeStyleProject p = j.createFreeStyleProject();
+        p.getBuildersList().add(new SemaphoredBuilder(semaphore, atomicResult));
+
+        // to be sure to reach the correct one
+        j.jenkins.setNumExecutors(1);
+
+        { // preliminary test, calling stopBuild without any executor results in 404
+            WebRequest request = new WebRequest(new URL(j.getURL() + "computers/0/executors/0/stopBuild"), HttpMethod.POST);
+            Page page = wc.getPage(request);
+            assertEquals(404, page.getWebResponse().getStatusCode());
+            assertRequestWasNotBlocked();
+        }
+
+        { // first try, we let the build finishes normally
+            // reset semaphore and result code
+            semaphore.drainPermits();
+            atomicResult.set(0);
+
+            QueueTaskFuture<FreeStyleBuild> futureBuild = p.scheduleBuild2(0);
+            futureBuild.waitForStart();
+
+            // let the build finishes
+            semaphore.release(1);
+
+            j.assertBuildStatus(Result.SUCCESS, futureBuild);
+            assertEquals(1, atomicResult.get());
+        }
+
+        { // second try, calling stopBuild without parameter interrupts the build (same as calling stop)
+            // reset semaphore and result code
+            semaphore.drainPermits();
+            atomicResult.set(0);
+
+            QueueTaskFuture<FreeStyleBuild> futureBuild = p.scheduleBuild2(0);
+            futureBuild.waitForStart();
+
+            WebRequest request = new WebRequest(new URL(j.getURL() + "computers/0/executors/0/stopBuild"), HttpMethod.POST);
+            Page page = wc.getPage(request);
+            assertEquals(404, page.getWebResponse().getStatusCode());
+            assertRequestWasNotBlocked();
+
+            // let the build finish quickly (if not interrupted already)
+            semaphore.release(1);
+
+            j.assertBuildStatus(Result.FAILURE, futureBuild);
+            assertEquals(3, atomicResult.get()); // interrupted
+        }
+
+        { // third try, calling stopBuild with the right parameter interrupts the build
+            // reset semaphore and result code
+            semaphore.drainPermits();
+            atomicResult.set(0);
+
+            QueueTaskFuture<FreeStyleBuild> futureBuild = p.scheduleBuild2(0);
+            FreeStyleBuild build = futureBuild.waitForStart();
+            String runExtId = URLEncoder.encode(build.getExternalizableId(), "UTF-8");
+
+            WebRequest request = new WebRequest(new URL(j.getURL() + "computers/0/executors/0/stopBuild?runExtId=" + runExtId), HttpMethod.POST);
+            Page page = wc.getPage(request);
+            assertEquals(404, page.getWebResponse().getStatusCode());
+            assertRequestWasNotBlocked();
+
+            // let the build finish quickly (if not interrupted already)
+            semaphore.release(1);
+
+            j.assertBuildStatus(Result.FAILURE, futureBuild);
+            assertEquals(3, atomicResult.get()); // interrupted
+        }
+
+        { // fourth try, calling stopBuild with a parameter not matching build id doesn't interrupt the build
+            // reset semaphore and result code
+            semaphore.drainPermits();
+            atomicResult.set(0);
+
+            QueueTaskFuture<FreeStyleBuild> futureBuild = p.scheduleBuild2(0);
+            futureBuild.waitForStart();
+
+            WebRequest request = new WebRequest(new URL(j.getURL() + "computers/0/executors/0/stopBuild?runExtId=whatever"), HttpMethod.POST);
+            Page page = wc.getPage(request);
+            assertEquals(404, page.getWebResponse().getStatusCode());
+            assertRequestWasNotBlocked();
+
+            // let the build finishes
+            semaphore.release(1);
+
+            j.assertBuildStatus(Result.SUCCESS, futureBuild);
+            assertEquals(1, atomicResult.get());
+        }
+    }
+
     @Test
     @Issue("SECURITY-404")
     public void anonCannotReadTextConsole() throws Exception {

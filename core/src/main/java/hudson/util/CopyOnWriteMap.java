@@ -30,7 +30,6 @@ import com.thoughtworks.xstream.converters.collections.TreeMapConverter;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
 import com.thoughtworks.xstream.mapper.Mapper;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -61,7 +60,7 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
     }
 
     protected CopyOnWriteMap() {
-        update(Collections.<K,V>emptyMap());
+        update(Collections.emptyMap());
     }
 
     protected void update(Map<K,V> m) {
@@ -79,26 +78,32 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
         update(d);
     }
 
+    @Override
     public int size() {
         return core.size();
     }
 
+    @Override
     public boolean isEmpty() {
         return core.isEmpty();
     }
 
+    @Override
     public boolean containsKey(Object key) {
         return core.containsKey(key);
     }
 
+    @Override
     public boolean containsValue(Object value) {
         return core.containsValue(value);
     }
 
+    @Override
     public V get(Object key) {
         return core.get(key);
     }
 
+    @Override
     public synchronized V put(K key, V value) {
         Map<K,V> m = copy();
         V r = m.put(key,value);
@@ -107,6 +112,7 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
         return r;
     }
 
+    @Override
     public synchronized V remove(Object key) {
         Map<K,V> m = copy();
         V r = m.remove(key);
@@ -115,6 +121,7 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
         return r;
     }
 
+    @Override
     public synchronized void putAll(Map<? extends K, ? extends V> t) {
         Map<K,V> m = copy();
         m.putAll(t);
@@ -123,13 +130,15 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
 
     protected abstract Map<K,V> copy();
 
+    @Override
     public synchronized void clear() {
-        update(Collections.<K,V>emptyMap());
+        update(Collections.emptyMap());
     }
 
     /**
      * This method will return a read-only {@link Set}.
      */
+    @Override
     public Set<K> keySet() {
         return view.keySet();
     }
@@ -137,6 +146,7 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
     /**
      * This method will return a read-only {@link Collection}.
      */
+    @Override
     public Collection<V> values() {
         return view.values();
     }
@@ -144,6 +154,7 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
     /**
      * This method will return a read-only {@link Set}.
      */
+    @Override
     public Set<Entry<K,V>> entrySet() {
         return view.entrySet();
     }
@@ -166,14 +177,15 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
      */
     public static final class Hash<K,V> extends CopyOnWriteMap<K,V> {
         public Hash(Map<K,V> core) {
-            super(new LinkedHashMap<K,V>(core));
+            super(new LinkedHashMap<>(core));
         }
 
         public Hash() {
         }
 
+        @Override
         protected Map<K,V> copy() {
-            return new LinkedHashMap<K,V>(core);
+            return new LinkedHashMap<>(core);
         }
 
         public static class ConverterImpl extends MapConverter {
@@ -210,7 +222,7 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
         }
 
         public Tree(Comparator<K> comparator) {
-            super(new TreeMap<K,V>(comparator));
+            super(new TreeMap<>(comparator));
             this.comparator = comparator;
         }
 
@@ -218,15 +230,16 @@ public abstract class CopyOnWriteMap<K,V> implements Map<K,V> {
             this(null);
         }
 
+        @Override
         protected Map<K,V> copy() {
-            TreeMap<K,V> m = new TreeMap<K,V>(comparator);
+            TreeMap<K,V> m = new TreeMap<>(comparator);
             m.putAll(core);
             return m;
         }
 
         @Override
         public synchronized void clear() {
-            update(new TreeMap<K,V>(comparator));
+            update(new TreeMap<>(comparator));
         }
 
         public static class ConverterImpl extends TreeMapConverter {

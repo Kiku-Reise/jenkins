@@ -23,14 +23,13 @@
  */
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
 import hudson.scm.SCM;
-
 import java.io.IOException;
-import javax.annotation.Nonnull;
 
 /**
  * Contributes environment variables to builds.
@@ -85,7 +84,7 @@ public abstract class EnvironmentContributor implements ExtensionPoint {
      * @param listener
      *      Connected to the build console. Can be used to report errors.
      */
-    public void buildEnvironmentFor(@Nonnull Run r, @Nonnull EnvVars envs, @Nonnull TaskListener listener) throws IOException, InterruptedException {}
+    public void buildEnvironmentFor(@NonNull Run r, @NonNull EnvVars envs, @NonNull TaskListener listener) throws IOException, InterruptedException {}
 
     /**
      * Contributes environment variables used for a job.
@@ -107,7 +106,7 @@ public abstract class EnvironmentContributor implements ExtensionPoint {
      *      Connected to the build console. Can be used to report errors.
      * @since 1.527
      */
-    public void buildEnvironmentFor(@Nonnull Job j, @Nonnull EnvVars envs, @Nonnull TaskListener listener) throws IOException, InterruptedException {}
+    public void buildEnvironmentFor(@NonNull Job j, @NonNull EnvVars envs, @NonNull TaskListener listener) throws IOException, InterruptedException {}
 
     /**
      * Returns all the registered {@link EnvironmentContributor}s.
@@ -123,14 +122,17 @@ public abstract class EnvironmentContributor implements ExtensionPoint {
      */
     @Extension
     public static class EnvVarsHtml implements RootAction {
+        @Override
         public String getIconFileName() {
             return null;
         }
 
+        @Override
         public String getDisplayName() {
             return null;
         }
 
+        @Override
         public String getUrlName() {
             return "env-vars.html";
         }

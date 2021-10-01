@@ -24,9 +24,15 @@
  */
 package hudson.model;
 
+import static javax.servlet.http.HttpServletResponse.SC_CREATED;
+import static javax.servlet.http.HttpServletResponse.SC_SEE_OTHER;
+
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.Queue.WaitingItem;
+import hudson.model.queue.ScheduleResult;
 import java.io.IOException;
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -35,10 +41,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import javax.servlet.ServletException;
-import static javax.servlet.http.HttpServletResponse.SC_CREATED;
 import jenkins.model.Jenkins;
 import jenkins.model.OptionalJobProperty;
 import jenkins.model.ParameterizedJobMixIn;
@@ -71,11 +74,11 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
     private final List<ParameterDefinition> parameterDefinitions;
 
     @DataBoundConstructor
-    public ParametersDefinitionProperty(@Nonnull List<ParameterDefinition> parameterDefinitions) {
+    public ParametersDefinitionProperty(@NonNull List<ParameterDefinition> parameterDefinitions) {
         this.parameterDefinitions = parameterDefinitions != null ? parameterDefinitions : new ArrayList<>();
     }
 
-    public ParametersDefinitionProperty(@Nonnull ParameterDefinition... parameterDefinitions) {
+    public ParametersDefinitionProperty(@NonNull ParameterDefinition... parameterDefinitions) {
         this.parameterDefinitions = parameterDefinitions != null ? Arrays.asList(parameterDefinitions) : new ArrayList<>();
     }
 
@@ -105,10 +108,10 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
         return new DefinitionsAbstractList(this.parameterDefinitions);
     }
 
-    @Nonnull
+    @NonNull
     @Override
     public Collection<Action> getJobActions(Job<?, ?> job) {
-        return Collections.<Action>singleton(this);
+        return Collections.singleton(this);
     }
 
     @Deprecated
@@ -138,7 +141,7 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
             delay=new TimeDuration(TimeUnit.MILLISECONDS.convert(getJob().getQuietPeriod(), TimeUnit.SECONDS));
 
 
-        List<ParameterValue> values = new ArrayList<ParameterValue>();
+        List<ParameterValue> values = new ArrayList<>();
         
         JSONObject formData = req.getSubmittedForm();
         JSONArray a = JSONArray.fromObject(formData.get("parameter"));
@@ -158,7 +161,7 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
             }
         }
 
-    	WaitingItem item = Jenkins.getInstance().getQueue().schedule(
+    	WaitingItem item = Jenkins.get().getQueue().schedule(
                 getJob(), delay.getTimeInSeconds(), new ParametersAction(values), new CauseAction(new Cause.UserIdCause()));
         if (item!=null) {
             String url = formData.optString("redirectTo");
@@ -177,7 +180,7 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
     }
 
     public void buildWithParameters(StaplerRequest req, StaplerResponse rsp, @CheckForNull TimeDuration delay) throws IOException, ServletException {
-        List<ParameterValue> values = new ArrayList<ParameterValue>();
+        List<ParameterValue> values = new ArrayList<>();
         for (ParameterDefinition d: parameterDefinitions) {
         	ParameterValue value = d.createValue(req);
         	if (value != null) {
@@ -187,19 +190,25 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
         if (delay==null)
             delay=new TimeDuration(TimeUnit.MILLISECONDS.convert(getJob().getQuietPeriod(), TimeUnit.SECONDS));
 
-        Queue.Item item = Jenkins.getInstance().getQueue().schedule2(
-                getJob(), delay.getTimeInSeconds(), new ParametersAction(values), ParameterizedJobMixIn.getBuildCause(getJob(), req)).getItem();
-
+        ScheduleResult scheduleResult = Jenkins.get().getQueue().schedule2(
+                getJob(), delay.getTimeInSeconds(), new ParametersAction(values), ParameterizedJobMixIn.getBuildCause(getJob(), req));
+        Queue.Item item = scheduleResult.getItem();
+        
+        if (item != null && !scheduleResult.isCreated()) {
+            rsp.sendRedirect(SC_SEE_OTHER, req.getContextPath() + '/' + item.getUrl());
+            return;
+        }
         if (item != null) {
             rsp.sendRedirect(SC_CREATED, req.getContextPath() + '/' + item.getUrl());
-        } else {
-            rsp.sendRedirect(".");
+            return;
         }
+        rsp.sendRedirect(".");
     }
 
     /**
      * Gets the {@link ParameterDefinition} of the given name, if any.
      */
+    @CheckForNull
     public ParameterDefinition getParameterDefinition(String name) {
         for (ParameterDefinition pd : parameterDefinitions)
             if (pd.getName().equals(name))
@@ -230,14 +239,17 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
         }
     }
 
+    @Override
     public String getDisplayName() {
         return null;
     }
 
+    @Override
     public String getIconFileName() {
         return null;
     }
 
+    @Override
     public String getUrlName() {
         return null;
     }
@@ -245,14 +257,16 @@ public class ParametersDefinitionProperty extends OptionalJobProperty<Job<?, ?>>
     private static class DefinitionsAbstractList extends AbstractList<String> {
         private final List<ParameterDefinition> parameterDefinitions;
 
-        public DefinitionsAbstractList(List<ParameterDefinition> parameterDefinitions) {
+        DefinitionsAbstractList(List<ParameterDefinition> parameterDefinitions) {
             this.parameterDefinitions = parameterDefinitions;
         }
 
+        @Override
         public String get(int index) {
             return this.parameterDefinitions.get(index).getName();
         }
 
+        @Override
         public int size() {
             return this.parameterDefinitions.size();
         }

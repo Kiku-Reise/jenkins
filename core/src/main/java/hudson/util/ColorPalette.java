@@ -23,12 +23,12 @@
  */
 package hudson.util;
 
-import org.jfree.chart.renderer.category.LineAndShapeRenderer;
-
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.awt.Color;
-import java.util.List;
-import java.util.Collections;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import org.jfree.chart.renderer.category.LineAndShapeRenderer;
 
 /**
  * Color constants consistent with the Hudson color palette. 
@@ -40,10 +40,13 @@ public class ColorPalette {
     public static final Color YELLOW = new Color(0xFC,0xE9,0x4F);
     public static final Color BLUE = new Color(0x72,0x9F,0xCF);
     public static final Color GREY = new Color(0xAB,0xAB,0xAB);
+    public static final Color DARK_GREY = new Color(0x77,0x77,0x77);
+    public static final Color LIGHT_GREY = new Color(0xcc,0xcc,0xcc);
     
     /**
      * Color list usable for generating line charts.
      */
+    @SuppressFBWarnings(value = "MS_SHOULD_BE_FINAL", justification = "used in several plugins")
     public static List<Color> LINE_GRAPH = Collections.unmodifiableList(Arrays.asList(
         new Color(0xCC0000),
         new Color(0x3465a4),
